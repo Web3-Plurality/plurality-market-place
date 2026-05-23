@@ -1,0 +1,184 @@
+{
+  "chatGPT": {
+    "CheckStatus": [
+      "form button[aria-label='Dictate button']",
+      "form button[aria-label='Voice input']",
+      "form button[data-testid='send-button']",
+      "form button[data-testid='composer-speech-button']"
+    ],
+    "LoginButton": [
+      "div[data-testid='composer-speech-button-container']",
+      "button[aria-label='Dictate button']"
+    ],
+    "ProfilesDropdown": [
+      "header.sticky",
+      "header",
+      "[data-testid='model-switcher-dropdown-button'], a.hover\\:bg-token-bg-tertiary[data-discover='true']"
+    ],
+    "InputField": ["#prompt-textarea.ProseMirror"],
+    "ChatHistory": {
+      "UserMessage": ["[data-message-author-role]"],
+      "Content": [".whitespace-pre-wrap", ".markdown"]
+    },
+    "CurrentQuery": [
+      "textarea#prompt-textarea",
+      "#prompt-textarea",
+      "div[contenteditable='true']"
+    ]
+  },
+  "grok": {
+    "CheckStatus": [
+      "form button[aria-label='Enter voice mode']",
+      "form button[aria-label='Submit'][type='submit']",
+      "form button[aria-label='Grok something'][type='button']",
+      "form button[aria-label='Model select']",
+      "form button[aria-label='Grok something']",
+      ".ms-auto.flex.flex-row.items-end.gap-1", 
+      ".ml-auto.flex.flex-row.items-end.gap-1"
+    ],
+    "LoginButton": [".ms-auto.flex.flex-row.items-end.gap-1", ".ml-auto.flex.flex-row.items-end.gap-1"],
+    "ProfilesDropdown": [
+      ".h-16.top-0",
+      ".absolute.start-1 .flex.flex-row.items-center"
+    ],
+    "InputField": [
+      "textarea[aria-label='Ask Grok anything']",
+      "textarea[placeholder='Ask anything']",
+      "div[contenteditable='true'].tiptap.ProseMirror"
+    ],
+    "ChatHistory": {
+      "UserMessage": [".items-end"],
+      "Content": [
+        ".whitespace-pre-wrap",
+        "[class*='break-words']",
+        ".response-content-markdown",
+        ".markdown",
+        "p",
+        ".relative > span"
+      ]
+    },
+    "Extra": {
+      "Container": ["[id^='response-']", "[class*='message-bubble']"],
+      "BubbleMessages": ".message-bubble",
+      "RemoveElements": [
+        ".action-buttons",
+        ".order-first",
+        ".sticky",
+        "button",
+        "svg",
+        ".tool-usage-container",
+        "[data-state]",
+        "[data-orientation]",
+        "[aria-label]",
+        "[data-testid]",
+        ".flex.items-center.gap-2",
+        ".opacity-0",
+        ".group-hover\\:opacity-100",
+        ".group-focus-within\\:opacity-100",
+        "[style*='opacity: 0']",
+        "[class*='opacity-0']"
+      ]
+    }
+  },
+  "perplexity": {
+    "CheckStatus": [
+      "button[aria-label='Sources']",
+      "button[aria-label='Choose a model']",
+      "button[aria-label='Attach files']"
+    ],
+    "LoginButton": [
+      "button[aria-label='Sources']",
+      "button[aria-label='Choose a model']",
+      "button[aria-label='Attach files']"
+    ],
+    "ProfilesDropdown": "div.\\@container\\/main.relative.isolate.flex-1",
+    "InputField": "#ask-input[data-lexical-editor='true']",
+    "ChatHistory": {
+      "Content": [
+        "h1.font-display"
+      ],
+      "UserMessage": [
+        "[class*='group/query'].whitespace-pre-line",
+        ".font-display.text-xl.font-medium.text-foreground",
+        ".font-sans.whitespace-pre-line.font-medium.text-foreground"
+      ],
+      "AssistantMessage": ["div[id^='markdown-content-']"],
+      "Extra":{
+        "EditButton": ["button[data-testid='edit-query-button']"],
+        "SourceSection": ["[data-testid*='source']"],
+        "ChatFormatting": [
+          "h1.font-display",
+          ".font-display.text-xl.font-medium.text-foreground",
+          ".font-sans.whitespace-pre-line.font-medium.text-foreground",
+          "div[id^='markdown-content-']"
+        ]
+      }
+    },
+    "CurrentQuery": "#ask-input[data-lexical-editor='true']",
+    "NewChat": {
+      "Primary": [
+        "[class*='thread']",
+        "[class*='conversation']"
+      ],
+      "Secondary": [
+        [
+          "[data-testid*='thread']",
+          "[class*='thread']",
+          "[class*='conversation']"
+        ]
+      ]
+    }
+  },
+  "claude": {
+    "CheckStatus": ["button[data-testid='model-selector-dropdown']", "[data-testid='user-message']"],
+    "LoginButton": "button[data-testid='model-selector-dropdown']",
+    "ProfilesDropdown": [
+      "button[data-testid='chat-title-button']",
+      ".flex.items-center.group",
+      "main.mx-auto.mt-4.w-full.flex-1.px-4",
+      ".h-screen.w-full.relative.min-w-0"
+    ],
+    "InputField": "div.ProseMirror[contenteditable='true'][aria-label*='Claude']",
+    "ChatHistory": {
+      "Content": ["[data-testid='user-message']", ".font-claude-response"],
+      "UserMessage": ["[data-testid='user-message']"],
+      "AssistantMessage": [".font-claude-response"]
+    },
+    "CurrentQuery": "div.ProseMirror[contenteditable='true'][aria-label='Write your prompt to Claude']"
+  },
+  "gemini": {
+    "CheckStatus": "button[aria-label='Open upload file menu']",
+    "LoginButton": ".leading-actions-wrapper",
+    "ProfilesDropdown": "[data-test-id='bard-logo-only']",
+    "InputField": [
+      "div.ql-editor.textarea[contenteditable='true']",
+      "div[contenteditable='true'][data-placeholder*='Describe your image']",
+      "div[contenteditable='true'][aria-label*='Enter a prompt']",
+      "div.text-input-field_textarea[contenteditable='true']"
+    ],
+    "ChatHistory": {
+      "Content": [".query-text-line", ".markdown p"],
+      "UserMessage": ["user-query"],
+      "AssistantMessage": ["model-response"]
+    },
+    "CurrentQuery": "div.ql-editor.textarea[contenteditable='true']"
+  },
+  "common": {
+    "NewChat": {
+      "Primary": [
+        "a[href='/new']", 
+        "a[href='/search']", 
+        "[data-testid='create-new-chat-button']",
+        "[data-testid='sidebar-new-thread']", 
+        "[data-testid='new-chat-button']", 
+        "[data-test-id='expanded-button']"
+      ],
+      "Secondary": [
+        "[data-testid='create-new-chat-button']", 
+        "[data-testid='sidebar-new-thread']", 
+        "[data-testid='new-chat-button']", 
+        "[data-test-id='expanded-button']"
+      ]
+    }
+  }
+}

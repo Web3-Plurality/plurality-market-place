@@ -1,0 +1,579 @@
+# ============================================
+# ChatGPT Configuration
+# ============================================
+chatGPT:
+  checkStatus:
+    any:
+      - ".ms-auto.flex.items-center.gap-1\\.5"
+      - "div[class*='ms-auto'][class*='flex'][class*='items-center']"
+
+  loginButton:
+    insert:
+      into:
+        traverseUp:
+          any:
+            - ".flex.items-center"
+            - "[class*='flex'][class*='items-center']"
+      relative:
+        any:
+          - ".ms-auto.flex.items-center.gap-1\\.5"
+          - "div[class*='ms-auto'][class*='flex'][class*='items-center']"
+      position: before
+    reposition:
+      all:
+        - find:
+            any:
+              - "div:has(> #plurality-sync-button)"
+          apply:
+            display: "inline-flex"
+            alignItems: "center"
+            justifyContent: "center"
+            marginInlineEnd: "8px"
+            height: "32px"
+
+  inputField:
+    any:
+      - "#prompt-textarea.ProseMirror"
+
+  profilesDropdown:
+    insert:
+      into:
+        any:
+          - "header.sticky"
+          - "header"
+      relative:
+        any:
+          - "[data-testid='model-switcher-dropdown-button']"
+          - "a.hover\\:bg-token-bg-tertiary[data-discover='true']"
+      position: after
+    reposition:
+      all:
+        # Position the dropdown wrapper
+        - find:
+            any:
+              - "#plurality-header-dropdown"
+          apply:
+            position: relative
+            zIndex: "999999"
+            margin: "0 8px"
+
+  chatHistory:
+    find:
+      user:
+        any:
+          - "[data-message-author-role='user']"
+      assistant:
+        any:
+          - "[data-message-author-role='assistant']"
+    extract:
+      content:
+        any:
+          - ".whitespace-pre-wrap"
+          - ".markdown"
+
+  currentQuery:
+    any:
+      - "textarea#prompt-textarea"
+      - "#prompt-textarea"
+      - "div[contenteditable='true']"
+
+  newChat:
+    any:
+      - "[data-testid='create-new-chat-button']"
+      - "a[href='/search']"
+
+
+# ============================================
+# Grok Configuration
+# ============================================
+grok:
+  checkStatus:
+    any:
+      - "form button[aria-label='Enter voice mode']"
+      - "form button[aria-label='Submit'][type='submit']"
+      - "form button[aria-label='Grok something'][type='button']"
+      - "form button[aria-label='Model select']"
+      - "form button[aria-label='Grok something']"
+      - ".ms-auto.flex.flex-row.items-end.gap-1"
+      - ".ml-auto.flex.flex-row.items-end.gap-1"
+
+  loginButton:
+    insert:
+      into:
+        any:
+          - ".ms-auto.flex.flex-row.items-end.gap-1"
+          - ".ml-auto.flex.flex-row.items-end.gap-1"
+      position: prepend
+    reposition:
+      all:
+        - find:
+            any:
+              - "div:has(> #plurality-sync-button)"
+          apply:
+            marginRight: "0px"
+        - find:
+            any:
+              - "#plurality-sync-button"
+          apply:
+            zIndex: "9999"
+            pointerEvents: "auto !important"
+            cursor: "pointer !important"
+            marginRight: "8px"
+            width: "40px"
+            height: "40px"
+
+  inputField:
+    any:
+      - "textarea[aria-label='Ask Grok anything']"
+      - "textarea[placeholder='Ask anything']"
+      - "div[contenteditable='true'].tiptap.ProseMirror"
+
+  profilesDropdown:
+    insert:
+      into:
+        any:
+          - ".h-16.top-0 > .absolute.start-1 > .flex.flex-row.items-center"
+      position: append
+    reposition:
+      all:
+        # Position the dropdown wrapper
+        - find:
+            any:
+              - "#plurality-header-dropdown"
+          apply:
+            position: relative
+            zIndex: "999999"
+            marginRight: "12px"
+        # Position the dropdown menu
+        - find:
+            any:
+              - "#plurality-header-dropdown > div[style*='position: absolute']"
+          apply:
+            left: "5px"
+            right: auto
+            boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
+
+  chatHistory:
+    find:
+      user:
+        any:
+          - "[id^='response-'].items-end"
+      assistant:
+        any:
+          - "[id^='response-']:not(.items-end)"
+    extract:
+      content:
+        any:
+          - ".message-bubble .whitespace-pre-wrap"
+          - ".message-bubble [class*='break-words']"
+          - ".message-bubble .response-content-markdown"
+          - ".message-bubble .markdown"
+          - ".message-bubble p"
+          - ".message-bubble .relative > span"
+          - ".message-bubble"
+      cleanup:
+        all:
+          - ".action-buttons"
+          - ".order-first"
+          - ".sticky"
+          - "button"
+          - "svg"
+          - ".tool-usage-container"
+          - "[data-state]"
+          - "[data-orientation]"
+          - "[aria-label]"
+          - "[data-testid]"
+          - ".flex.items-center.gap-2"
+          - ".opacity-0"
+          - ".group-hover\\:opacity-100"
+          - ".group-focus-within\\:opacity-100"
+          - "[style*='opacity: 0']"
+          - "[class*='opacity-0']"
+
+  currentQuery:
+    any:
+      - "textarea[aria-label='Ask Grok anything']"
+      - "div[contenteditable='true'].tiptap"
+
+
+# ============================================
+# Perplexity Configuration
+# ============================================
+perplexity:
+  checkStatus:
+    any:
+      - "div.flex.items-center.justify-self-end.col-start-3.row-start-2"
+
+  loginButton:
+    insert:
+      into: self
+      relative:
+        any:
+          - "div.flex.items-center.justify-self-end.col-start-3.row-start-2"
+      position: prepend
+    reposition:
+      all:
+        # Style the wrapper (span for old chats, div for new chats)
+        - find:
+            any:
+              - "span:has(> #plurality-sync-button)"
+              - "div:has(> #plurality-sync-button)"
+          apply:
+            display: "flex"
+            flexDirection: "row"
+            alignItems: "center"
+            gap: "8px"
+
+  inputField:
+    any:
+      - "#ask-input[data-lexical-editor='true']"
+
+  profilesDropdown:
+    insert:
+      into:
+        any:
+          - "div.\\@container\\/main.relative.isolate.flex-1"
+      position: append
+    reposition:
+      all:
+        # Position our dropdown at the top left
+        - find:
+            any:
+              - "#plurality-header-dropdown"
+          apply:
+            position: absolute
+            top: "10px"
+            left: "16px"
+            maxWidth: "260px"
+            zIndex: "9999"
+        # Style the dropdown button
+        - find:
+            any:
+              - "#plurality-header-dropdown > button"
+          apply:
+            maxWidth: "286px"
+        # Position the dropdown menu
+        - find:
+            any:
+              - "#plurality-header-dropdown > div[style*='position: absolute']"
+          apply:
+            left: "80px"
+            right: auto
+        # Push Perplexity's navigation tabs to the right to make room
+        - find:
+            any:
+              - "div.hideScroll.pointer-events-auto.inline-flex.h-full.items-end.overflow-x-auto"
+              - "div.hideScroll.pointer-events-auto.inline-flex.h-full.items-center.overflow-x-auto"
+          apply:
+            marginLeft: "70px"
+        # Push the entire header flex container to make room for dropdown
+        - find:
+            any:
+              - "div.flex.h-full.min-w-0.flex-1.items-center"
+          apply:
+            marginLeft: "270px"
+
+  chatHistory:
+    find:
+      user:
+        any:
+          - "[class*='group/query'].whitespace-pre-line"
+          - ".font-display.text-xl.font-medium.text-foreground"
+          - ".font-sans.whitespace-pre-line.font-medium.text-foreground"
+      assistant:
+        any:
+          - "div[id^='markdown-content-']"
+    extract:
+      content:
+        any:
+          - ".prose"
+          - "span.select-text"
+          - ".select-text"
+      cleanup:
+        all:
+          - "button[aria-label='Edit Query']"
+          - "button[aria-label='Copy Query']"
+          - "button[data-testid='toggle-query-expand-button']"
+          - ".citation"
+          - "span.citation-nbsp"
+      skip:
+        all:
+          - "button[data-testid='edit-query-button']"
+
+  currentQuery:
+    any:
+      - "#ask-input[data-lexical-editor='true']"
+
+  newChat:
+    any:
+      - "[class*='thread']"
+      - "[class*='conversation']"
+      - "[data-testid*='thread']"
+
+
+# ============================================
+# Claude Configuration
+# ============================================
+claude:
+  checkStatus:
+    any:
+      - ".flex.gap-2.w-full.items-center"
+      - "div.flex.items-center"
+
+  loginButton:
+    insert:
+      into:
+        any:
+          - ".flex.gap-2.w-full.items-center"
+          - "div.flex.items-center"
+      relative:
+        any:
+          - ".transition-all.ease-out:has(button[data-testid='model-selector-dropdown'])"
+          - "div:has(> .overflow-hidden > button[data-testid='model-selector-dropdown'])"
+          - ".flex.gap-2.w-full.items-center > div[class*='transition']:has(button[data-testid='model-selector-dropdown'])"
+      position: before
+    reposition:
+      all:
+        - find:
+            any:
+              - "div:has(> #plurality-sync-button)"
+          apply:
+            display: "flex"
+            flexDirection: "row"
+            alignItems: "center"
+            gap: "8px"
+            marginRight: "-10px"
+
+  inputField:
+    any:
+      - "div.ProseMirror[contenteditable='true'][aria-label*='Claude']"
+      - "[contenteditable='true'][data-value]"
+
+  profilesDropdown:
+    any:
+      # Option 1: Old chat threads - insert before the chat title container
+      - find:
+          any:
+            - "button[data-testid='chat-title-button']"
+        insert:
+          into:
+            traverseUp:
+              any:
+                - ".flex.min-w-0.flex-1.shrink.md\\:items-center"
+                - ".flex.min-w-0.flex-1.shrink"
+                - "div.flex:has(> div.flex.items-center)"
+          position: prepend
+      # Option 2: Project pages - insert before the project title (h1)
+      - find:
+          any:
+            - "h1.font-heading.text-text-200"
+            - "main.mx-auto:has([data-testid='project-doc-upload']) h1.font-heading"
+        insert:
+          into:
+            traverseUp:
+              any:
+                - ".mb-2.flex.items-start.gap-3"
+                - "div.flex.items-start"
+          position: prepend
+      # Option 3: New chats - only match chat pages, not project listing pages
+      - find:
+          any:
+            - "main.mx-auto:has([data-testid='chat-input']):not(:has(h1.font-heading))"
+            - "main:has([data-testid='chat-input']):not(:has([data-testid='project-doc-upload']))"
+        insert:
+          into: self
+          position: prepend
+      # Option 4: Fallback - append to main container
+      - find:
+          any:
+            - ".h-screen.w-full.relative.min-w-0"
+        insert:
+          into: self
+          position: prepend
+    reposition:
+      all:
+        # Wrapper positioning on project pages (before h1 title)
+        - find:
+            any:
+              - "div.flex.items-start:has(h1.font-heading) #plurality-header-dropdown"
+              - ".mb-2.flex.items-start.gap-3 #plurality-header-dropdown"
+          apply:
+            position: relative
+            zIndex: "999999"
+            margin: "0"
+            marginRight: "12px"
+            display: "inline-flex"
+            flexShrink: "0"
+        # Parent container positioning (ensure flex-start alignment for project pages)
+        - find:
+            any:
+              - "div.flex.min-w-0.flex-1:has(a[href*='/project/'])"
+          apply:
+            justifyContent: "flex-start"
+        # Wrapper positioning when there's a project breadcrumb in the page
+        - find:
+            any:
+              - "div.flex.min-w-0.flex-1:has(a[href*='/project/']) #plurality-header-dropdown"
+          apply:
+            position: relative
+            zIndex: "999999"
+            margin: "0"
+            marginRight: "8px"
+            display: "inline-flex"
+            flexShrink: "0"
+        # Default wrapper positioning (for chats without project breadcrumbs)
+        - find:
+            any:
+              - "#plurality-header-dropdown"
+          apply:
+            position: relative
+            zIndex: "999999"
+            margin: "0 8px"
+            display: "inline-flex"
+            flexShrink: "0"
+        # Style the dropdown button
+        - find:
+            any:
+              - "#plurality-header-dropdown > button"
+          apply:
+            maxWidth: "286px"
+        # Position the dropdown menu to align with button's left edge
+        - find:
+            any:
+              - "#plurality-header-dropdown > div[style*='position: absolute']"
+          apply:
+            left: "0 !important"
+            right: "auto !important"
+            minWidth: "200px"
+
+  chatHistory:
+    find:
+      user:
+        any:
+          - "[data-testid='user-message']"
+      assistant:
+        any:
+          - "[data-is-streaming] > .font-claude-response"
+          - ".group.relative.pb-8 > .font-claude-response"
+          - ".font-claude-response.relative.leading-\\[1\\.65rem\\]"
+    extract:
+      content:
+        any:
+          - ".standard-markdown"
+          - ".progressive-markdown"
+          - ".markdown"
+          - ".prose"
+          - ".artifact-block-cell"
+          - "*"
+
+  currentQuery:
+    any:
+      - "div.ProseMirror[contenteditable='true'][aria-label='Write your prompt to Claude']"
+      - "div.ProseMirror[contenteditable='true'][data-testid='chat-input']"
+
+  newChat:
+    any:
+      - "a[href='/new']"
+
+
+# ============================================
+# Gemini Configuration
+# ============================================
+gemini:
+  checkStatus:
+    any:
+      - ".trailing-actions-wrapper"
+      - "button[aria-label='Use microphone']"
+      - "button[aria-label='Microphone']"
+      - "button[aria-label='Send message']"
+
+  loginButton:
+    insert:
+      into:
+        any:
+          - ".trailing-actions-wrapper"
+      position: prepend
+    reposition:
+      all:
+        - find:
+            any:
+              - "div:has(> #plurality-sync-button)"
+          apply:
+            marginLeft: "8px"
+
+  inputField:
+    any:
+      - "div.ql-editor.textarea[contenteditable='true']"
+      - "div[contenteditable='true'][data-placeholder*='Describe your image']"
+      - "div[contenteditable='true'][aria-label*='Enter a prompt']"
+      - "div.text-input-field_textarea[contenteditable='true']"
+
+  profilesDropdown:
+    insert:
+      into:
+        any:
+          - ".top-bar-actions .left-section"
+      position: prepend
+    reposition:
+      all:
+        # Hide the Gemini logo to prevent overlap
+        - find:
+            any:
+              - "[data-test-id='bard-mode-switcher']"
+          apply:
+            display: "none"
+        # Make left-section a flex container to hold content properly
+        - find:
+            any:
+              - ".top-bar-actions .left-section"
+          apply:
+            display: "flex"
+            alignItems: "center"
+        # Position the dropdown wrapper
+        - find:
+            any:
+              - "#plurality-header-dropdown"
+          apply:
+            position: relative
+            zIndex: "999999"
+            marginLeft: "12px"
+            marginRight: "8px"
+            fontFamily: "'Lexend', sans-serif"
+        # Style the dropdown button
+        - find:
+            any:
+              - "#plurality-header-dropdown > button"
+          apply:
+            padding: "8px 12px"
+            maxWidth: "286px"
+        # Style the dropdown menu scrollbar
+        - find:
+            any:
+              - "#plurality-header-dropdown > div[style*='position: absolute']"
+          apply:
+            scrollbarWidth: thin
+            scrollbarColor: "#9CA3AF #F9FAFB"
+
+  chatHistory:
+    find:
+      user:
+        any:
+          - "user-query"
+      assistant:
+        any:
+          - "model-response"
+    extract:
+      content:
+        any:
+          - ".query-text-line"
+          - ".markdown p"
+          - "*"
+
+  currentQuery:
+    any:
+      - "div.ql-editor.textarea[contenteditable='true']"
+
+  newChat:
+    any:
+      - "[data-test-id='expanded-button']"
+      - "[data-testid='new-chat-button']"
