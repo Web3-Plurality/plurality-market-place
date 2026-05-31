@@ -8,7 +8,6 @@ export interface AuthState {
   token: string | null;
   googleJwtToken: string | null;
   authMethod: 'google' | 'email' | 'metamask' | null;
-  chatEncKey: string | null; // Stored in sessionStorage (ephemeral, survives refresh, clears on tab close)
   isLoading: boolean;
   error: string | null;
 }
@@ -19,7 +18,6 @@ const initialState: AuthState = {
   token: null,
   googleJwtToken: null,
   authMethod: null,
-  chatEncKey: null,
   isLoading: false,
   error: null,
 };
@@ -50,9 +48,6 @@ const authSlice = createSlice({
     setAuthMethod: (state, action: PayloadAction<'google' | 'email' | 'metamask' | null>) => {
       state.authMethod = action.payload;
     },
-    setChatEncKey: (state, action: PayloadAction<string | null>) => {
-      state.chatEncKey = action.payload;
-    },
     setError: (state, action: PayloadAction<string>) => {
       state.error = action.payload;
       state.isLoading = false;
@@ -63,11 +58,10 @@ const authSlice = createSlice({
       state.token = null;
       state.googleJwtToken = null;
       state.authMethod = null;
-      state.chatEncKey = null;
       state.error = null;
     },
   },
 });
 
-export const { setLoading, setUser, updateUser, setToken, setGoogleJwtToken, setAuthMethod, setChatEncKey, setError, logout } = authSlice.actions;
+export const { setLoading, setUser, updateUser, setToken, setGoogleJwtToken, setAuthMethod, setError, logout } = authSlice.actions;
 export default authSlice.reducer;

@@ -18,7 +18,7 @@ const statement = 'I am the owner of this address';
 interface UseMetamaskLoginReturn {
   isLoading: boolean;
   error: boolean;
-  authenticate: (walletAddress: string) => Promise<{ success: boolean; token?: string; chatEncKey?: string }>;
+  authenticate: (walletAddress: string) => Promise<{ success: boolean; token?: string }>;
   setError: (error: boolean) => void;
 }
 
@@ -74,7 +74,7 @@ export const useMetamaskLogin = (): UseMetamaskLoginReturn => {
 
   const authenticate = useCallback(async (
     walletAddress: string
-  ): Promise<{ success: boolean; token?: string; chatEncKey?: string }> => {
+  ): Promise<{ success: boolean; token?: string }> => {
     setIsLoading(true);
     setError(false);
 
@@ -104,7 +104,7 @@ export const useMetamaskLogin = (): UseMetamaskLoginReturn => {
       );
       if (authData.success) {
         // Auth data is now stored in Redux via Login.tsx dispatch
-        return { success: true, token: authData.token, chatEncKey: authData.chatEncKey };
+        return { success: true, token: authData.token };
       }
 
       console.error('[MetaMask] Backend authentication failed');

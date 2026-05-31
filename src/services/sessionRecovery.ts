@@ -9,7 +9,6 @@ export interface SessionRecoveryResult {
   success: boolean;
   userId?: string;
   authAddress?: string;
-  chatEncKey?: string;
 }
 
 /**
@@ -28,7 +27,6 @@ export async function tryRecoverSession(): Promise<SessionRecoveryResult> {
       success: true,
       userId: data.userId,
       authAddress: data.authAddress,
-      chatEncKey: data.chatEncKey,
     };
   } catch {
     return { success: false };

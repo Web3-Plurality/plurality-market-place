@@ -401,10 +401,10 @@ const MarketplaceLayoutInner = () => {
 const MarketplaceLayout = () => {
   // SIWE-only: the HttpOnly session cookie is the auth — there's no JWT to
   // check expiry on. Backend re-validates the cookie on every request, and
-  // tryRecoverSession() drives isAuthenticated/chatEncKey on mount.
-  const { isAuthenticated, chatEncKey } = useAppSelector((state) => state.auth);
+  // tryRecoverSession() drives isAuthenticated on mount.
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
 
-  if (!isAuthenticated || !chatEncKey) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 

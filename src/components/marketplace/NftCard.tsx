@@ -1,14 +1,12 @@
 import styled from 'styled-components';
 import { MdOpenInNew, MdShield, MdVerified, MdExpandMore, MdExpandLess } from 'react-icons/md';
-import { useState, useCallback, useEffect } from 'react';
-import { message } from 'antd';
-import { apiPost, apiGet } from '../../utils/api';
+import { useState, useEffect } from 'react';
+import { apiGet } from '../../utils/api';
 import type { NftSnapshot, SnapshotContext } from './types';
 
 interface Props {
   nft: NftSnapshot;
   actions?: React.ReactNode;
-  readOnly?: boolean; // true = no Register button, just show status (for Browse/Acquired)
 }
 
 const Card = styled.div`
@@ -163,12 +161,10 @@ const ActionsRow = styled.div`
   background: ${({ theme }) => theme.colors.background};
 `;
 
-const NftCard = ({ nft, actions, readOnly = false }: Props) => {
+const NftCard = ({ nft, actions }: Props) => {
   const [expanded, setExpanded] = useState(false);
-  const [registeringId, setRegisteringId] = useState<string | null>(null);
   const [registeredContexts, setRegisteredContexts] = useState<Set<string>>(new Set());
   const [contextTxHashes, setContextTxHashes] = useState<Record<string, string>>({});
-  const [checkingStatus, setCheckingStatus] = useState(false);
 
   // Check live on-chain status for contexts when expanded
   useEffect(() => {
@@ -179,7 +175,6 @@ const NftCard = ({ nft, actions, readOnly = false }: Props) => {
     );
     if (unchecked.length === 0) return;
 
-    setCheckingStatus(true);
     const checkLiveStatus = async () => {
       const registered = new Set<string>();
       const txHashes: Record<string, string> = {};
@@ -199,7 +194,6 @@ const NftCard = ({ nft, actions, readOnly = false }: Props) => {
         setRegisteredContexts((prev) => new Set([...prev, ...registered]));
         setContextTxHashes((prev) => ({ ...prev, ...txHashes }));
       }
-      setCheckingStatus(false);
     };
     checkLiveStatus();
   }, [expanded, nft.contexts]);
@@ -209,29 +203,6 @@ const NftCard = ({ nft, actions, readOnly = false }: Props) => {
     : null;
 
   const mintDate = nft.mintedAt ? new Date(nft.mintedAt).toLocaleDateString() : 'Pending';
-
-  const handleRegister = useCallback(async (contextId: string) => {
-    setRegisteringId(contextId);
-    try {
-      const response = await apiPost(`/blockchain/register-context/${contextId}`);
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        message.success('Context registered on-chain');
-        setRegisteredContexts((prev) => new Set(prev).add(contextId));
-        if (data.txHash) setContextTxHashes((prev) => ({ ...prev, [contextId]: data.txHash }));
-      } else if (response.status === 409) {
-        message.info('Context is already registered on-chain');
-        setRegisteredContexts((prev) => new Set(prev).add(contextId));
-      } else {
-        message.error(data.error || 'Failed to register on-chain');
-      }
-    } catch (error: any) {
-      message.error('Failed to register: ' + (error.message || 'Unknown error'));
-    } finally {
-      setRegisteringId(null);
-    }
-  }, []);
 
   const isContextRegistered = (ctx: SnapshotContext) =>
     ctx.registeredOnChain || registeredContexts.has(ctx.contextId);
@@ -273,7 +244,6 @@ const NftCard = ({ nft, actions, readOnly = false }: Props) => {
           ) : (
             (nft.contexts || []).map((ctx) => {
               const registered = isContextRegistered(ctx);
-              const isRegistering = registeringId === ctx.contextId;
               const txHash = contextTxHashes[ctx.contextId];
               const explorerLink = txHash
                 ? `https://explorer.oasis.io/testnet/sapphire/tx/${txHash}`
@@ -301,20 +271,10 @@ const NftCard = ({ nft, actions, readOnly = false }: Props) => {
                         On-chain
                         <MdOpenInNew size={10} />
                       </OnChainBadge>
-                    ) : readOnly ? (
+                    ) : (
                       <OnChainBadge $registered={false} disabled style={{ cursor: 'default' }}>
                         <MdShield size={12} />
                         Not verified
-                      </OnChainBadge>
-                    ) : (
-                      <OnChainBadge
-                        $registered={false}
-                        onClick={() => !isRegistering && !checkingStatus && handleRegister(ctx.contextId)}
-                        disabled={isRegistering || checkingStatus}
-                        title={checkingStatus ? 'Checking status...' : 'Click to register on-chain'}
-                      >
-                        <MdShield size={12} />
-                        {checkingStatus ? 'Checking...' : isRegistering ? 'Registering...' : 'Register'}
                       </OnChainBadge>
                     )
                   )}

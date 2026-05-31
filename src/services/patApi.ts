@@ -6,7 +6,6 @@
  *  - GET    /pat/tokens          → list visible (active + recently revoked)
  *  - POST   /pat/tokens          → create; plaintext returned ONCE in `token`
  *  - DELETE /pat/tokens/:id      → revoke
- *  - POST   /pat/tokens/:id/rotate → issue replacement with grace period
  */
 
 import { apiDelete, apiGet, apiPost } from '../utils/api';
@@ -71,13 +70,4 @@ export async function revokePat(id: string): Promise<void> {
     const err = await r.json().catch(() => ({}));
     throw new Error(err.error || `Failed to revoke token (${r.status})`);
   }
-}
-
-export async function rotatePat(id: string, gracePeriodDays = 7): Promise<PatCreatedRecord> {
-  const r = await apiPost(`/pat/tokens/${id}/rotate`, { gracePeriodDays });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.error || `Failed to rotate token (${r.status})`);
-  }
-  return r.json();
 }

@@ -6,9 +6,8 @@ import { message } from 'antd';
 import { SiEthereum } from 'react-icons/si';
 import { MdToken, MdShield, MdLock } from 'react-icons/md';
 import { useAppDispatch, useAppSelector } from '../hooks/useAppStore';
-import { setUser, setToken, setAuthMethod, setChatEncKey } from '../store/slices/authSlice';
+import { setUser, setToken, setAuthMethod } from '../store/slices/authSlice';
 import { useMetamaskLogin } from '../hooks/useMetamaskLogin';
-import { syncLoginWithExtension, syncLoginAndWaitForClose, storeOnboardingSource, getOnboardingSource, notifyExtensionAction } from '../utils/extensionSync';
 
 // ─── Animations ──────────────────────────────────────────────────────────────
 
@@ -332,14 +331,11 @@ const LoginPage = () => {
 
   const auth = useAppSelector((state) => state.auth);
   const isAuthenticated = auth?.isAuthenticated ?? false;
-  const chatEncKey = auth?.chatEncKey ?? null;
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    storeOnboardingSource();
-
-    if (isAuthenticated && chatEncKey) {
+    if (isAuthenticated) {
       navigate('/marketplace', { replace: true });
     } else {
       setIsCheckingAuth(false);
@@ -383,20 +379,6 @@ const LoginPage = () => {
           dispatch(setAuthMethod('metamask'));
           if (authResult.token) {
             dispatch(setToken(authResult.token));
-          }
-          if (authResult.chatEncKey) {
-            dispatch(setChatEncKey(authResult.chatEncKey));
-          }
-
-          if (authResult.token && authResult.chatEncKey) {
-            const source = getOnboardingSource();
-            if (source === 'third-party' || source === 'save-context') {
-              await syncLoginAndWaitForClose(authResult.token, authResult.chatEncKey, walletAddress);
-              notifyExtensionAction('saveContextComplete');
-              return;
-            } else {
-              syncLoginWithExtension(authResult.token, authResult.chatEncKey, walletAddress);
-            }
           }
 
           navigate('/marketplace');

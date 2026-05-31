@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { message, Input, Modal } from 'antd';
-import { MdRefresh, MdDownload, MdSell, MdRemoveShoppingCart } from 'react-icons/md';
+import { MdRefresh, MdSell, MdRemoveShoppingCart } from 'react-icons/md';
 import { useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
 import NftPreviewCard from './NftPreviewCard';
@@ -107,7 +107,6 @@ const Loading = styled.div`
 
 const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
   const { writeContractAsync } = useWriteContract();
-  const [importingId, setImportingId] = useState<string | null>(null);
   const [detailNft, setDetailNft] = useState<NftSnapshot | null>(null);
   const [processing, setProcessing] = useState<number | null>(null);
   const [processingLabel, setProcessingLabel] = useState('');
@@ -120,31 +119,6 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
     const info = res.ok ? await res.json() : null;
     return info?.nftAddress || null;
   }, []);
-
-  const handleImport = useCallback(
-    async (snapshotId: string): Promise<string | null> => {
-      setImportingId(snapshotId);
-      try {
-        const response = await apiPost(`/blockchain/import-snapshot/${snapshotId}`);
-        const data = await response.json();
-        if (response.ok && data.success) {
-          message.success(
-            `Re-imported "${data.profileName}" with ${data.importedContexts} contexts`,
-          );
-          return data.profileId ?? null;
-        }
-        message.error(data.error || 'Failed to import');
-        return null;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        message.error('Failed to import: ' + (error.message || 'Unknown error'));
-        return null;
-      } finally {
-        setImportingId(null);
-      }
-    },
-    [],
-  );
 
   const handleList = useCallback(async (tokenId: number, price: string) => {
     if (!price || isNaN(parseFloat(price))) {
@@ -261,7 +235,6 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
       ) : (
         <Grid>
           {nfts.map((nft) => {
-            const isImporting = importingId === nft.id;
             const isProcessing = processing === nft.tokenId;
 
             return (
@@ -271,15 +244,6 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
                 onClick={() => setDetailNft(nft)}
                 actions={
                   <ActionsRow>
-                    <ActionButton
-                      $variant="default"
-                      onClick={() => handleImport(nft.id)}
-                      disabled={isImporting}
-                      title="Re-import this NFT's contexts into a new bucket (e.g. if you deleted the auto-imported one)"
-                    >
-                      <MdDownload size={11} />
-                      {isImporting ? '…' : 'Re-import'}
-                    </ActionButton>
                     {nft.tokenId && (
                       nft.listingActive ? (
                         <ActionButton

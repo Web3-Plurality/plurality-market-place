@@ -551,7 +551,6 @@ const BrowseListings = ({ onPurchased }: Props) => {
               <NftCard
                 key={nft.id}
                 nft={{ ...nft, listingActive: true }}
-                readOnly
                 actions={
                   <>
                     <PriceInfo>Price: {priceDisplay} TEST</PriceInfo>

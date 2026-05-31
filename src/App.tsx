@@ -7,7 +7,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider, theme as antdTheme } from 'antd';
 import { store, persistor } from './store';
 import type { RootState, AppDispatch } from './store';
-import { setUser, setChatEncKey, setAuthMethod, logout } from './store/slices/authSlice';
+import { setUser, setAuthMethod, logout } from './store/slices/authSlice';
 import { wagmiConfig, queryClient } from './services/wagmi';
 import { ThemeProvider } from './contexts/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
@@ -39,7 +39,7 @@ import MarketplaceLayout from './layouts/MarketplaceLayout';
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch<AppDispatch>();
-  const { isAuthenticated, chatEncKey } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
@@ -60,11 +60,10 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
       // SIWE-only — no token to stash (the HttpOnly cookie IS the auth) and
       // no email loginMethod since marketplace is MetaMask-only.
-      if (session.success && session.userId && session.chatEncKey) {
+      if (session.success && session.userId) {
         dispatch(setUser({ id: session.userId }));
-        dispatch(setChatEncKey(session.chatEncKey));
         dispatch(setAuthMethod('metamask'));
-      } else if (isAuthenticated || chatEncKey) {
+      } else if (isAuthenticated) {
         dispatch(logout());
       }
 
