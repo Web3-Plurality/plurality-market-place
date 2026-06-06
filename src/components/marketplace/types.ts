@@ -29,6 +29,7 @@ export interface NftSnapshot {
   description: string | null;
   coverImage: string | null;
   contexts?: SnapshotContext[]; // dropped from backend; left optional for UI compat
+  contextCount?: number;        // batch-counted by backend (replaces contexts.length on cards)
   metadataURI: string | null;
   bucketHash?: string | null;
   mintTxHash: string | null;

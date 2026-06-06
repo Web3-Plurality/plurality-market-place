@@ -138,7 +138,12 @@ const NftPreviewCard = ({ nft, actions, onClick }: Props) => {
         <Footer>
           <FooterLeft>
             <MdToken size={12} />
-            {nft.contexts?.length ?? 0} context{(nft.contexts?.length ?? 0) === 1 ? '' : 's'}
+            {(() => {
+              // Backend now sends `contextCount` directly. Fall back to the
+              // legacy inline `contexts` array for old responses.
+              const n = nft.contextCount ?? nft.contexts?.length ?? 0;
+              return `${n} context${n === 1 ? '' : 's'}`;
+            })()}
           </FooterLeft>
           {actions && <Actions onClick={(e) => e.stopPropagation()}>{actions}</Actions>}
         </Footer>
