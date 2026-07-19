@@ -285,6 +285,14 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
               tabIndex={0}
               onClick={() => setActiveBucket({ id: b.id, name: b.profileName, isImmutable: !!b.isImmutable })}
               onKeyDown={(e) => {
+                // Only act on keys that originated on the Card itself. antd
+                // Modals (e.g. the Mint dialog rendered below) portal to
+                // <body>, but React synthetic events still bubble through the
+                // React tree — so a space typed in the dialog's tagline/
+                // description input would otherwise hit this handler and
+                // re-open the bucket. Guarding on target===currentTarget keeps
+                // keyboard activation working without swallowing nested input.
+                if (e.target !== e.currentTarget) return;
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   setActiveBucket({ id: b.id, name: b.profileName, isImmutable: !!b.isImmutable });

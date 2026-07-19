@@ -228,7 +228,7 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
       setStep('preparing-tx2');
       let mintPrep;
       try {
-        mintPrep = await prepareMint(profileId);
+        mintPrep = await prepareMint(profileId, metadata.copies ?? 1);
       } catch (err) {
         setStep('idle');
         message.error((err as Error).message || 'Failed to prepare mint');

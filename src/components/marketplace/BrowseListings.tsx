@@ -1,21 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
-import { message, Input, Select } from 'antd';
+import { Input, Select } from 'antd';
 import {
   MdRefresh,
-  MdShoppingCart,
+  MdStorefront,
   MdSearch,
   MdGridView,
   MdViewList,
-  MdStorefront,
-  MdTrendingUp,
   MdLocalOffer,
 } from 'react-icons/md';
-import { useAccount, useWriteContract, useSwitchChain } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { formatEther } from 'viem';
-import { apiGet, apiPost } from '../../utils/api';
-import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
-import { oasisSapphireTestnet } from '../../services/wagmi';
+import { apiGet } from '../../utils/api';
 import NftCard from './NftCard';
 import NftPreviewCard from './NftPreviewCard';
 import NftDetailModal from './NftDetailModal';
@@ -188,9 +184,11 @@ const ListContainer = styled.div`
   gap: 12px;
 `;
 
-/* ── List-view buy controls (reused from old code) ────── */
+/* ── Card aggregate summary + view action ─────────────── */
 
-const BuyButton = styled.button`
+// One card == one bucket. It shows the aggregate across all sellers; picking a
+// seller + quantity (the actual buy) happens inside the detail modal.
+const ViewButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -213,18 +211,18 @@ const BuyButton = styled.button`
   }
 `;
 
+const AggregateInfo = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  margin-right: 8px;
+`;
+
 const OwnBadge = styled.span`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.textMuted};
   padding: 6px 12px;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: 8px;
-`;
-
-const PriceInfo = styled.span`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-right: 8px;
 `;
 
 /* ── Empty / Loading ───────────────────────────────────── */
@@ -272,18 +270,24 @@ function sortListings(list: NftSnapshot[], sort: SortOption): NftSnapshot[] {
   }
 }
 
+/* ── Aggregate summary for the browse card (one card == one bucket) ── */
+
+function aggregateSummary(nft: NftSnapshot): string {
+  const floorWei = nft.floorPrice ?? nft.listingPrice;
+  const from = floorWei ? `from ${formatEther(BigInt(floorWei))} TEST` : 'price unavailable';
+  const copies = nft.copiesAvailable ?? 0;
+  const sellers = nft.sellerCount ?? 0;
+  return `${from} · ${copies} cop${copies === 1 ? 'y' : 'ies'} · ${sellers} seller${sellers === 1 ? '' : 's'}`;
+}
+
 /* ══════════════════════════════════════════════════════════
    Component
    ══════════════════════════════════════════════════════════ */
 
 const BrowseListings = ({ onPurchased }: Props) => {
-  const { address, isConnected, chainId } = useAccount();
-  const { switchChain } = useSwitchChain();
-  const { writeContractAsync } = useWriteContract();
+  const { address } = useAccount();
   const [listings, setListings] = useState<NftSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [buyingTokenId, setBuyingTokenId] = useState<number | null>(null);
-  const [buyingLabel, setBuyingLabel] = useState('');
 
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
@@ -327,102 +331,29 @@ const BrowseListings = ({ onPurchased }: Props) => {
 
   const stats = useMemo(() => {
     const total = listings.length;
+    // floorPrice is the min per-unit price for the bucket; listingPrice mirrors
+    // it, so either works — prefer floorPrice when present.
     const prices = listings
-      .filter((n) => n.listingPrice)
-      .map((n) => BigInt(n.listingPrice!));
+      .map((n) => n.floorPrice ?? n.listingPrice)
+      .filter((p): p is string => !!p)
+      .map((p) => BigInt(p));
     const floor = prices.length > 0 ? prices.reduce((a, b) => (a < b ? a : b)) : BigInt(0);
-    const volume = prices.length > 0 ? prices.reduce((a, b) => a + b, BigInt(0)) : BigInt(0);
     return {
       total,
       floor: prices.length > 0 ? formatEther(floor) : '--',
-      volume: prices.length > 0 ? formatEther(volume) : '--',
     };
   }, [listings]);
 
-  /* ── Buy handler (preserved from original) ───────────── */
+  /* ── Purchase-complete: refresh the (now-changed) listings ─ */
 
-  const handleBuy = useCallback(
-    async (nft: NftSnapshot) => {
-      if (!isConnected || !address) {
-        message.error('Please connect your wallet first');
-        return;
-      }
-
-      if (chainId !== oasisSapphireTestnet.id) {
-        try {
-          switchChain({ chainId: oasisSapphireTestnet.id });
-          message.info('Please switch to Oasis Sapphire Testnet');
-          return;
-        } catch {
-          message.error('Failed to switch network');
-          return;
-        }
-      }
-
-      if (!nft.tokenId || !nft.listingPrice) {
-        message.error('Invalid listing data');
-        return;
-      }
-
-      // Belt-and-suspenders: contract rejects own-buy with "Cannot buy own
-       // listing". Backend may omit ownerWallet (v1 — no chain lookup yet);
-       // in that case skip the local check and let the contract enforce.
-      if (nft.ownerWallet && nft.ownerWallet.toLowerCase() === address.toLowerCase()) {
-        message.error('You cannot buy your own listing');
-        return;
-      }
-
-      setBuyingTokenId(nft.tokenId);
-      try {
-        const infoRes = await apiGet('/blockchain/contract-info');
-        const info = infoRes.ok ? await infoRes.json() : null;
-        const contractAddr = info?.nftAddress;
-        if (!contractAddr) {
-          message.error('Contract address not available');
-          return;
-        }
-
-        setBuyingLabel('Confirm in MetaMask...');
-        const txHash = await writeContractAsync({
-          address: contractAddr as `0x${string}`,
-          abi: PluralityMemoryNFTABI,
-          functionName: 'buyBucket',
-          args: [BigInt(nft.tokenId)],
-          value: BigInt(nft.listingPrice),
-        });
-
-        setBuyingLabel('Confirming on-chain...');
-
-        const { createPublicClient, http, defineChain } = await import('viem');
-        const chain = defineChain({
-          id: 23295,
-          name: 'Oasis Sapphire Testnet',
-          nativeCurrency: { name: 'TEST', symbol: 'TEST', decimals: 18 },
-          rpcUrls: { default: { http: ['https://testnet.sapphire.oasis.io'] } },
-        });
-        const publicClient = createPublicClient({ chain, transport: http() });
-        await publicClient.waitForTransactionReceipt({ hash: txHash });
-
-        // Record purchase in backend
-        setBuyingLabel('Updating records...');
-        await apiPost(`/blockchain/buy/${nft.tokenId}`, { txHash });
-
-        message.success('NFT purchased successfully!');
-        setDetailNft(null); // close modal if open
-        onPurchased?.();
-        fetchListings();
-      } catch (error: any) {
-        const msg = error.message?.includes('User rejected')
-          ? 'Transaction rejected'
-          : 'Failed to buy';
-        message.error(msg);
-      } finally {
-        setBuyingTokenId(null);
-        setBuyingLabel('');
-      }
-    },
-    [isConnected, address, chainId, switchChain, writeContractAsync, onPurchased, fetchListings],
-  );
+  // Buying moved into the detail modal (a bucket has copies across multiple
+  // sellers, so the buyer must pick one). The modal drives the tx and calls
+  // this back on success so the browse view re-fetches and the parent can react.
+  const handlePurchased = useCallback(() => {
+    setDetailNft(null);
+    onPurchased?.();
+    fetchListings();
+  }, [onPurchased, fetchListings]);
 
   /* ── Render ──────────────────────────────────────────── */
 
@@ -448,15 +379,6 @@ const BrowseListings = ({ onPurchased }: Props) => {
           <StatContent>
             <StatValue>{stats.floor}</StatValue>
             <StatLabel>Floor Price (TEST)</StatLabel>
-          </StatContent>
-        </StatCard>
-        <StatCard>
-          <StatIcon>
-            <MdTrendingUp size={20} />
-          </StatIcon>
-          <StatContent>
-            <StatValue>{stats.volume}</StatValue>
-            <StatLabel>Total Volume (TEST)</StatLabel>
           </StatContent>
         </StatCard>
       </StatsBar>
@@ -513,24 +435,21 @@ const BrowseListings = ({ onPurchased }: Props) => {
           {filteredListings.map((nft) => {
             const isOwnListing =
               !!address && !!nft.ownerWallet && nft.ownerWallet.toLowerCase() === address.toLowerCase();
-            const isBuying = buyingTokenId === nft.tokenId;
-            const priceDisplay = nft.listingPrice
-              ? formatEther(BigInt(nft.listingPrice))
-              : '?';
 
             return (
               <NftPreviewCard
                 key={nft.id}
                 nft={nft}
                 onClick={() => setDetailNft(nft)}
+                meta={<AggregateInfo>{aggregateSummary(nft)}</AggregateInfo>}
                 actions={
                   isOwnListing ? (
                     <OwnBadge>Your Listing</OwnBadge>
                   ) : (
-                    <BuyButton onClick={() => handleBuy(nft)} disabled={isBuying}>
-                      <MdShoppingCart size={14} />
-                      {isBuying ? buyingLabel || '…' : `Buy ${priceDisplay} TEST`}
-                    </BuyButton>
+                    <ViewButton onClick={() => setDetailNft(nft)}>
+                      <MdStorefront size={14} />
+                      View
+                    </ViewButton>
                   )
                 }
               />
@@ -542,10 +461,6 @@ const BrowseListings = ({ onPurchased }: Props) => {
           {filteredListings.map((nft) => {
             const isOwnListing =
               !!address && !!nft.ownerWallet && nft.ownerWallet.toLowerCase() === address.toLowerCase();
-            const isBuying = buyingTokenId === nft.tokenId;
-            const priceDisplay = nft.listingPrice
-              ? formatEther(BigInt(nft.listingPrice))
-              : '?';
 
             return (
               <NftCard
@@ -553,16 +468,14 @@ const BrowseListings = ({ onPurchased }: Props) => {
                 nft={{ ...nft, listingActive: true }}
                 actions={
                   <>
-                    <PriceInfo>Price: {priceDisplay} TEST</PriceInfo>
+                    <AggregateInfo>{aggregateSummary(nft)}</AggregateInfo>
                     {isOwnListing ? (
                       <OwnBadge>Your Listing</OwnBadge>
                     ) : (
-                      <BuyButton onClick={() => handleBuy(nft)} disabled={isBuying}>
-                        <MdShoppingCart size={16} />
-                        {isBuying
-                          ? buyingLabel || 'Processing...'
-                          : `Buy for ${priceDisplay} TEST`}
-                      </BuyButton>
+                      <ViewButton onClick={() => setDetailNft(nft)}>
+                        <MdStorefront size={16} />
+                        View & Buy
+                      </ViewButton>
                     )}
                   </>
                 }
@@ -572,14 +485,17 @@ const BrowseListings = ({ onPurchased }: Props) => {
         </ListContainer>
       )}
 
-      {/* Detail Modal */}
+      {/* Detail Modal — the buy surface. onBuy is a no-op here (the modal owns
+          the multi-seller buy flow); handlePurchased refreshes on success. */}
       <NftDetailModal
         nft={detailNft}
         open={!!detailNft}
         onClose={() => setDetailNft(null)}
-        onBuy={handleBuy}
-        isBuying={buyingTokenId === detailNft?.tokenId}
-        buyingLabel={buyingLabel}
+        onBuy={() => {}}
+        isBuying={false}
+        buyingLabel=""
+        previewOnly
+        onPurchased={handlePurchased}
         isOwnListing={
           !!address &&
           !!detailNft?.ownerWallet &&
