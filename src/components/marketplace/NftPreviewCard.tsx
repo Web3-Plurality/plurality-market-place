@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react';
 import styled from 'styled-components';
-import { MdToken, MdImage } from 'react-icons/md';
+import { MdToken, MdImage, MdLayers } from 'react-icons/md';
 import type { NftSnapshot } from './types';
 
 interface Props {
   nft: NftSnapshot;
   actions?: ReactNode;
+  /** Optional full-width info line (e.g. marketplace aggregate) shown above the
+   *  footer so it doesn't cram into the contexts/actions row. */
+  meta?: ReactNode;
   onClick?: () => void;
 }
 
@@ -71,6 +74,24 @@ const TokenChip = styled.div`
   z-index: 1;
 `;
 
+// "You own N copies" — top-right, opposite the token id chip.
+const OwnedChip = styled.div`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  z-index: 1;
+`;
+
 const Body = styled.div`
   padding: 14px 16px 16px;
 `;
@@ -95,6 +116,12 @@ const Tagline = styled.div`
   min-height: 32px;
 `;
 
+const Meta = styled.div`
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+`;
+
 const Footer = styled.div`
   display: flex;
   align-items: center;
@@ -116,7 +143,7 @@ const Actions = styled.div`
   flex-wrap: wrap;
 `;
 
-const NftPreviewCard = ({ nft, actions, onClick }: Props) => {
+const NftPreviewCard = ({ nft, actions, meta, onClick }: Props) => {
   const cover = nft.coverImage || nft.profileImage || undefined;
   const title = nft.title || nft.profileName;
   const tagline = nft.tagline || nft.description?.split('\n')[0] || 'A memory bucket minted on-chain.';
@@ -126,6 +153,11 @@ const NftPreviewCard = ({ nft, actions, onClick }: Props) => {
     <Card $clickable={!!onClick} onClick={onClick}>
       <Cover $url={cover}>
         {tokenLabel && <TokenChip>{tokenLabel}</TokenChip>}
+        {typeof nft.copiesOwned === 'number' && nft.copiesOwned > 0 && (
+          <OwnedChip title={`You own ${nft.copiesOwned} cop${nft.copiesOwned === 1 ? 'y' : 'ies'}`}>
+            <MdLayers size={12} /> ×{nft.copiesOwned}
+          </OwnedChip>
+        )}
         {!cover && (
           <CoverFallback>
             <MdImage size={36} />
@@ -135,6 +167,7 @@ const NftPreviewCard = ({ nft, actions, onClick }: Props) => {
       <Body>
         <Title>{title}</Title>
         <Tagline>{tagline}</Tagline>
+        {meta && <Meta>{meta}</Meta>}
         <Footer>
           <FooterLeft>
             <MdToken size={12} />

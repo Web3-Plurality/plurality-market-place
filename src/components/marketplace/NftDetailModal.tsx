@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { Modal } from 'antd';
+import { Modal, InputNumber, message } from 'antd';
 
 const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 `;
 import { MdOpenInNew, MdVerified, MdShield, MdShoppingCart, MdHistory, MdToken, MdSell, MdShoppingBag, MdDownload, MdSync } from 'react-icons/md';
+import { useAccount, useWriteContract, useSwitchChain, usePublicClient } from 'wagmi';
 import { formatEther } from 'viem';
 import OwnerIdenticon from './OwnerIdenticon';
-import { apiGet } from '../../utils/api';
-import type { NftSnapshot } from './types';
+import NftReviews from './NftReviews';
+import { apiGet, apiPost } from '../../utils/api';
+import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
+import { oasisSapphireTestnet } from '../../services/wagmi';
+import type { NftSnapshot, SellerListing } from './types';
 
 interface Props {
   nft: NftSnapshot | null;
@@ -20,6 +24,14 @@ interface Props {
   isBuying: boolean;
   buyingLabel: string;
   isOwnListing: boolean;
+  // Browse path: the viewer doesn't hold this NFT, so /ai/context would 403.
+  // Show only the verified count (every context of a minted bucket is on-chain
+  // by definition) and withhold the actual context list until purchase.
+  previewOnly?: boolean;
+  // Browse path: the modal is the buy surface. After a successful purchase the
+  // parent list refreshes (e.g. re-fetch listings + close). Absent for the
+  // owner-viewed My-Minted / Acquired paths, which never trigger a buy.
+  onPurchased?: () => void;
 }
 
 const Header = styled.div`
@@ -243,6 +255,108 @@ const SpinLabel = styled.span`
   }
 `;
 
+/* ── Seller picker (browse buy surface) ───────────────── */
+
+const SellerList = styled.div`
+  display: flex;
+  flex-direction: column;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 10px;
+  overflow: hidden;
+`;
+
+const SellerRow = styled.button<{ $selected: boolean; $disabled?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ $selected, theme }) =>
+    $selected ? `${theme.colors.primary}12` : theme.colors.background};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
+  opacity: ${({ $disabled }) => ($disabled ? 0.55 : 1)};
+  text-align: left;
+  transition: background 0.15s ease;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: ${({ $selected, $disabled, theme }) =>
+      $disabled
+        ? theme.colors.background
+        : $selected
+          ? `${theme.colors.primary}18`
+          : theme.colors.backgroundSecondary};
+  }
+`;
+
+const SellerAddr = styled.span`
+  font-family: monospace;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+`;
+
+const SellerPrice = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  white-space: nowrap;
+`;
+
+const SellerCopies = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  white-space: nowrap;
+`;
+
+const YouTag = styled.span`
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.backgroundSecondary};
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const QuantityRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+`;
+
+const QuantityLabel = styled.span`
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const TotalRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+`;
+
+const TotalLabel = styled.span`
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const Hint = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  margin-top: 10px;
+`;
+
 /* ── Transaction History ──────────────────────────────── */
 
 const Timeline = styled.div`
@@ -250,6 +364,22 @@ const Timeline = styled.div`
   flex-direction: column;
   gap: 0;
   position: relative;
+`;
+
+const HistoryToggle = styled.button`
+  margin-top: 6px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 const TimelineItem = styled.div`
@@ -374,19 +504,42 @@ const NftDetailModal = ({
   nft,
   open,
   onClose,
-  onBuy,
-  isBuying,
-  buyingLabel,
+  // onBuy / isBuying / buyingLabel remain in Props for caller compatibility but
+  // are unused now — buying goes through the in-modal seller-picker.
   isOwnListing,
+  previewOnly = false,
+  onPurchased,
 }: Props) => {
   // Registration is now part of the mint flow (one batch tx, signed by the
   // creator before tx2 = mintBucket). Once a bucket is minted, every context
   // is on-chain by definition. The modal only shows ✓ verification state;
   // there are no register buttons or per-context tx wiring.
   const [history, setHistory] = useState<HistoryEvent[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [myCopies, setMyCopies] = useState<number | null>(null);
   const [verifiedContextIds, setVerifiedContextIds] = useState<Set<string>>(new Set());
   const [checkingContexts, setCheckingContexts] = useState(false);
   const [contextsError, setContextsError] = useState<string | null>(null);
+
+  // ── Multi-seller buy surface (browse/preview path only) ──────────
+  // A bucket has N copies spread across multiple holders, each of whom can
+  // list copies at their own price. On the browse card we only show the
+  // aggregate; the real purchase happens here after the buyer picks a seller
+  // and a quantity. Owner-viewed paths (previewOnly=false) never fetch this.
+  const { address, isConnected, chainId } = useAccount();
+  const { switchChain } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: oasisSapphireTestnet.id });
+
+  const [sellers, setSellers] = useState<SellerListing[]>([]);
+  const [loadingSellers, setLoadingSellers] = useState(false);
+  const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [buying, setBuying] = useState(false);
+  const [buyLabel, setBuyLabel] = useState('');
+
+  // The buy surface is active only on the browse path for a listed token.
+  const showSellerPicker = previewOnly && !!nft?.tokenId && !!nft?.listingActive;
 
   // Post-rewrite: NFT response no longer carries contexts[]. Fetch them live
   // from /ai/context on open — the backend's permission resolver lets the
@@ -418,6 +571,16 @@ const NftDetailModal = ({
           }
         })
         .catch(() => {});
+    }
+
+    // Browse path: viewer isn't the NFT holder, so /ai/context would 403.
+    // Skip the fetch entirely and render the count-only summary instead.
+    if (previewOnly) {
+      setLiveContexts([]);
+      setContextsError(null);
+      setCheckingContexts(false);
+      setVerifiedContextIds(new Set());
+      return;
     }
 
     // Fetch contexts via /ai/context. Failures (404, 403) used to be silently
@@ -457,7 +620,164 @@ const NftDetailModal = ({
         setVerifiedContextIds(verified);
         setCheckingContexts(false);
       });
-  }, [open, nft?.profileId, nft?.tokenId]);
+  }, [open, nft?.profileId, nft?.tokenId, previewOnly]);
+
+  // Fetch the per-seller listing breakdown when the buy surface is active.
+  // Backend returns sellers sorted cheapest-first; we pre-select the first
+  // seller the connected wallet is allowed to buy from (i.e. not itself).
+  useEffect(() => {
+    if (!open || !showSellerPicker || !nft?.tokenId) {
+      setSellers([]);
+      setSelectedSeller(null);
+      setQuantity(1);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSellers(true);
+    apiGet(`/blockchain/marketplace/listings/${nft.tokenId}`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list = (data.sellers || []) as SellerListing[];
+        setSellers(list);
+        // Pre-select the cheapest seller that isn't the connected wallet.
+        const firstBuyable = list.find(
+          (s) => !address || s.seller.toLowerCase() !== address.toLowerCase(),
+        );
+        setSelectedSeller(firstBuyable ? firstBuyable.seller : null);
+        setQuantity(1);
+      })
+      .catch(() => {
+        if (!cancelled) setSellers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSellers(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, showSellerPicker, nft?.tokenId, address]);
+
+  // How many copies of this edition the connected wallet holds. Read on-chain
+  // (balanceOf) so it's always accurate regardless of listing/sale state.
+  useEffect(() => {
+    const tokenId = nft?.tokenId;
+    if (!open || !tokenId || !address || !publicClient) {
+      setMyCopies(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const infoRes = await apiGet('/blockchain/contract-info');
+        const nftAddr = infoRes.ok ? (await infoRes.json())?.nftAddress : null;
+        if (!nftAddr) return;
+        const bal = (await publicClient.readContract({
+          address: nftAddr as `0x${string}`,
+          abi: PluralityMemoryNFTABI,
+          functionName: 'balanceOf',
+          args: [address, BigInt(tokenId)],
+        })) as bigint;
+        if (!cancelled) setMyCopies(Number(bal));
+      } catch {
+        if (!cancelled) setMyCopies(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, nft?.tokenId, address, publicClient]);
+
+  // On-chain buy of `quantity` copies from `selectedSeller`. value must equal
+  // unitPrice × quantity (contract reverts otherwise). After the receipt we
+  // POST /blockchain/buy/:tokenId so the backend derives seller+amount+price
+  // from the emitted event, then refresh the parent list and close.
+  const handleBuyBucket = useCallback(async () => {
+    if (!nft?.tokenId) return;
+    const sellerListing = sellers.find((s) => s.seller === selectedSeller);
+    if (!sellerListing) {
+      message.error('Please select a seller');
+      return;
+    }
+    if (!isConnected || !address) {
+      message.error('Please connect your wallet first');
+      return;
+    }
+    if (address.toLowerCase() === sellerListing.seller.toLowerCase()) {
+      message.error('You cannot buy your own listing');
+      return;
+    }
+    if (quantity < 1 || quantity > sellerListing.amount) {
+      message.error('Invalid quantity');
+      return;
+    }
+
+    if (chainId !== oasisSapphireTestnet.id) {
+      try {
+        switchChain({ chainId: oasisSapphireTestnet.id });
+        message.info('Please switch to Oasis Sapphire Testnet');
+        return;
+      } catch {
+        message.error('Failed to switch network');
+        return;
+      }
+    }
+
+    setBuying(true);
+    try {
+      const infoRes = await apiGet('/blockchain/contract-info');
+      const info = infoRes.ok ? await infoRes.json() : null;
+      const contractAddr = info?.nftAddress;
+      if (!contractAddr) {
+        message.error('Contract address not available');
+        return;
+      }
+
+      setBuyLabel('Confirm in MetaMask...');
+      const totalValue = BigInt(sellerListing.price) * BigInt(quantity);
+      const txHash = await writeContractAsync({
+        address: contractAddr as `0x${string}`,
+        abi: PluralityMemoryNFTABI,
+        functionName: 'buyBucket',
+        args: [BigInt(nft.tokenId), sellerListing.seller as `0x${string}`, BigInt(quantity)],
+        value: totalValue,
+      });
+
+      setBuyLabel('Confirming on-chain...');
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+      }
+
+      setBuyLabel('Updating records...');
+      await apiPost(`/blockchain/buy/${nft.tokenId}`, { txHash });
+
+      message.success('NFT purchased successfully!');
+      onPurchased?.();
+      onClose();
+    } catch (error: any) {
+      const msg = error?.message?.includes('User rejected')
+        ? 'Transaction rejected'
+        : 'Failed to buy';
+      message.error(msg);
+    } finally {
+      setBuying(false);
+      setBuyLabel('');
+    }
+  }, [
+    nft?.tokenId,
+    sellers,
+    selectedSeller,
+    quantity,
+    isConnected,
+    address,
+    chainId,
+    switchChain,
+    writeContractAsync,
+    publicClient,
+    onPurchased,
+    onClose,
+  ]);
 
   // ── Hooks must run on every render — keep them above the early return.
   // Register handlers used to live here. In the new flow registration is
@@ -477,6 +797,17 @@ const NftDetailModal = ({
 
   const verifiedCount = contexts.filter((c) => isContextVerified(c)).length;
   const totalContexts = contexts.length;
+
+  // Browse path: we never fetch the context list. A minted bucket has every
+  // context registered on-chain by definition, so verified === total === count.
+  const previewCount = nft.contextCount ?? 0;
+
+  // Seller-picker derived values (only meaningful when showSellerPicker).
+  const activeSeller = sellers.find((s) => s.seller === selectedSeller) || null;
+  const maxQty = activeSeller ? activeSeller.amount : 1;
+  const totalWei = activeSeller
+    ? BigInt(activeSeller.price) * BigInt(Math.max(1, Math.min(quantity, maxQty)))
+    : BigInt(0);
 
   return (
     <Modal
@@ -500,6 +831,20 @@ const NftDetailModal = ({
         <InfoRow>
           Chain: <InfoValue>{nft.chain || 'Oasis Sapphire Testnet'}</InfoValue>
         </InfoRow>
+        {nft.editionSize && nft.editionSize > 1 && (
+          <InfoRow>
+            Edition: <InfoValue>{nft.editionSize} copies</InfoValue>
+          </InfoRow>
+        )}
+        {myCopies !== null && myCopies > 0 && (
+          <InfoRow>
+            Copies you own:{' '}
+            <InfoValue>
+              {myCopies}
+              {nft.editionSize ? ` of ${nft.editionSize}` : ''}
+            </InfoValue>
+          </InfoRow>
+        )}
         {explorerUrl && (
           <InfoRow>
             <ExplorerLink href={explorerUrl} target="_blank" rel="noopener noreferrer">
@@ -521,7 +866,9 @@ const NftDetailModal = ({
 
       <Section>
         <SectionLabel>
-          Contexts {checkingContexts ? (
+          Contexts {previewOnly ? (
+            <>({previewCount}/{previewCount} verified on-chain)</>
+          ) : checkingContexts ? (
             <SpinLabel>
               <MdSync size={12} /> verifying...
             </SpinLabel>
@@ -529,7 +876,15 @@ const NftDetailModal = ({
             <>({verifiedCount}/{totalContexts} verified on-chain)</>
           )}
         </SectionLabel>
-        {totalContexts > 0 ? (
+        {previewOnly ? (
+          <InfoRow>
+            <InfoValue>
+              {previewCount > 0
+                ? `${previewCount} context${previewCount === 1 ? '' : 's'}, all verified on-chain. Contents are revealed to the NFT holder after purchase.`
+                : 'No contexts in this bucket.'}
+            </InfoValue>
+          </InfoRow>
+        ) : totalContexts > 0 ? (
           <ContextListContainer>
             {contexts.map((ctx) => {
               const verified = isContextVerified(ctx);
@@ -569,13 +924,15 @@ const NftDetailModal = ({
         <Section>
           <SectionLabel>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <MdHistory size={14} /> Transaction History
+              <MdHistory size={14} /> Transaction History ({history.length})
             </span>
           </SectionLabel>
           <Timeline>
-            {history.map((evt, i) => {
+            {/* Collapsed: only the 3 most recent events. Multi-copy editions
+                rack up a long list of list/buy events fast. */}
+            {(historyExpanded ? history : history.slice(-3)).map((evt, i, arr) => {
               const config = EVENT_CONFIG[evt.event] || { icon: <MdHistory size={16} />, color: '#999' };
-              const isLast = i === history.length - 1;
+              const isLast = i === arr.length - 1;
               return (
                 <TimelineItem key={`${evt.event}-${i}`}>
                   <div style={{ position: 'relative' }}>
@@ -614,30 +971,143 @@ const NftDetailModal = ({
               );
             })}
           </Timeline>
+          {history.length > 3 && (
+            <HistoryToggle onClick={() => setHistoryExpanded((v) => !v)}>
+              {historyExpanded ? 'Show less' : `Show all ${history.length} transactions`}
+            </HistoryToggle>
+          )}
         </Section>
       )}
 
-      {/* Only show price/buy section when the NFT is actually listed for sale.
-          Owner-viewed unlisted NFTs (My Minted / Acquired tabs) skip this block
-          so we don't display "? TEST" or a redundant "Your Listing" badge. */}
-      {nft.listingActive && (
+      {/* On-chain reviews (ERC-8004 ReputationRegistry). Needs a tokenId
+          (the agentId) — pending mints have none yet. */}
+      {nft.tokenId && (
         <>
           <Divider />
-          <PriceSection>
-            <PriceDisplay>
-              {priceDisplay}
-              <PriceUnit>TEST</PriceUnit>
-            </PriceDisplay>
-            {isOwnListing ? (
-              <OwnBadge>Your Listing</OwnBadge>
-            ) : (
-              <BuyButton onClick={() => onBuy(nft)} disabled={isBuying}>
-                <MdShoppingCart size={18} />
-                {isBuying ? buyingLabel || 'Processing...' : 'Buy Now'}
-              </BuyButton>
-            )}
-          </PriceSection>
+          <Section>
+            <NftReviews tokenId={nft.tokenId} />
+          </Section>
         </>
+      )}
+
+      {/* Browse path: multi-seller buy surface. A bucket has copies spread
+          across holders; the buyer picks a seller + quantity here (buying can't
+          happen from the browse card, which only shows the aggregate). */}
+      {showSellerPicker ? (
+        <>
+          <Divider />
+          <Section>
+            <SectionLabel>
+              Buy a copy {loadingSellers ? (
+                <SpinLabel>
+                  <MdSync size={12} /> loading sellers...
+                </SpinLabel>
+              ) : (
+                <>({sellers.length} seller{sellers.length === 1 ? '' : 's'})</>
+              )}
+            </SectionLabel>
+
+            {!loadingSellers && sellers.length === 0 ? (
+              <InfoRow>
+                <InfoValue>No active sellers for this bucket right now.</InfoValue>
+              </InfoRow>
+            ) : (
+              <SellerList>
+                {sellers.map((s) => {
+                  const isOwn =
+                    !!address && s.seller.toLowerCase() === address.toLowerCase();
+                  const selected = s.seller === selectedSeller;
+                  return (
+                    <SellerRow
+                      key={s.seller}
+                      type="button"
+                      $selected={selected}
+                      $disabled={isOwn}
+                      disabled={isOwn}
+                      onClick={() => {
+                        if (isOwn) return;
+                        setSelectedSeller(s.seller);
+                        setQuantity(1);
+                      }}
+                    >
+                      <SellerAddr>{truncateAddress(s.seller)}</SellerAddr>
+                      {isOwn && <YouTag>You</YouTag>}
+                      <SellerPrice>{formatEther(BigInt(s.price))} TEST</SellerPrice>
+                      <SellerCopies>
+                        {s.amount} cop{s.amount === 1 ? 'y' : 'ies'}
+                      </SellerCopies>
+                    </SellerRow>
+                  );
+                })}
+              </SellerList>
+            )}
+
+            {activeSeller && (
+              <>
+                <QuantityRow>
+                  <QuantityLabel>Quantity</QuantityLabel>
+                  <InputNumber
+                    min={1}
+                    max={maxQty}
+                    value={quantity}
+                    onChange={(v) =>
+                      setQuantity(Math.max(1, Math.min(Number(v) || 1, maxQty)))
+                    }
+                  />
+                </QuantityRow>
+
+                <PriceSection>
+                  <div>
+                    <TotalLabel>Total</TotalLabel>
+                    <TotalRow>
+                      <PriceDisplay>
+                        {formatEther(totalWei)}
+                        <PriceUnit>TEST</PriceUnit>
+                      </PriceDisplay>
+                    </TotalRow>
+                    {/* Show the math + which seller so "Total" isn't a mystery. */}
+                    <Hint>
+                      {quantity} × {formatEther(BigInt(activeSeller.price))} TEST · from{' '}
+                      {truncateAddress(activeSeller.seller)}
+                    </Hint>
+                  </div>
+                  {!isConnected ? (
+                    <OwnBadge>Connect wallet to buy</OwnBadge>
+                  ) : (
+                    <BuyButton onClick={handleBuyBucket} disabled={buying}>
+                      <MdShoppingCart size={18} />
+                      {buying
+                        ? buyLabel || 'Processing...'
+                        : `Buy ${quantity} cop${quantity === 1 ? 'y' : 'ies'}`}
+                    </BuyButton>
+                  )}
+                </PriceSection>
+                {!isConnected && (
+                  <Hint>Connect your wallet to purchase a copy of this bucket.</Hint>
+                )}
+              </>
+            )}
+          </Section>
+        </>
+      ) : (
+        /* Owner-viewed path (My Minted / Acquired): show "Your Listing" + your
+           own per-unit price ONLY when THIS wallet actually has a listing.
+           No Buy here — buying happens via the browse seller-picker, and you
+           can't buy a token you already own. */
+        isOwnListing && (
+          <>
+            <Divider />
+            <PriceSection>
+              <PriceDisplay>
+                {nft.myListingPrice ? formatEther(BigInt(nft.myListingPrice)) : priceDisplay}
+                <PriceUnit>
+                  TEST{nft.myListingAmount ? ` · ${nft.myListingAmount} listed` : ''}
+                </PriceUnit>
+              </PriceDisplay>
+              <OwnBadge>Your Listing</OwnBadge>
+            </PriceSection>
+          </>
+        )
       )}
     </Modal>
   );

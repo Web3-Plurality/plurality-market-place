@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import styled from 'styled-components';
-import { Modal, Input, message, Spin } from 'antd';
+import { Modal, Input, InputNumber, message, Spin } from 'antd';
 import { MdCloudUpload, MdToken, MdImage } from 'react-icons/md';
 import type { NftMintMetadata } from '../../hooks/useMemoryNFT';
 
@@ -18,6 +18,8 @@ interface MintNftDialogProps {
 const TITLE_MAX = 120;
 const TAGLINE_MAX = 280;
 const DESCRIPTION_MAX = 5000;
+const COPIES_MIN = 1;
+const COPIES_MAX = 10;
 
 const Layout = styled.div`
   display: grid;
@@ -190,6 +192,7 @@ const MintNftDialog = ({
   const [title, setTitle] = useState(defaultTitle);
   const [tagline, setTagline] = useState('');
   const [description, setDescription] = useState('');
+  const [copies, setCopies] = useState<number>(COPIES_MIN);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverLocalLoading, setCoverLocalLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,10 +209,13 @@ const MintNftDialog = ({
       trimmedTagline.length <= TAGLINE_MAX &&
       trimmedDescription.length > 0 &&
       trimmedDescription.length <= DESCRIPTION_MAX &&
+      Number.isInteger(copies) &&
+      copies >= COPIES_MIN &&
+      copies <= COPIES_MAX &&
       !!coverUrl &&
       !uploading &&
       !submitting,
-    [trimmedTitle, trimmedTagline, trimmedDescription, coverUrl, uploading, submitting],
+    [trimmedTitle, trimmedTagline, trimmedDescription, copies, coverUrl, uploading, submitting],
   );
 
   const handleFile = useCallback(
@@ -250,6 +256,7 @@ const MintNftDialog = ({
       tagline: trimmedTagline,
       description: trimmedDescription,
       coverImage: coverUrl || undefined,
+      copies,
     });
   };
 
@@ -366,6 +373,21 @@ const MintNftDialog = ({
               style={{ resize: 'none' }}
             />
             <Counter>{trimmedDescription.length}/{DESCRIPTION_MAX}</Counter>
+          </Field>
+
+          <Field>
+            <Label>
+              Number of copies<Required>*</Required>
+            </Label>
+            <InputNumber
+              value={copies}
+              onChange={(value) => setCopies(typeof value === 'number' ? value : COPIES_MIN)}
+              min={COPIES_MIN}
+              max={COPIES_MAX}
+              precision={0}
+              style={{ width: '100%' }}
+            />
+            <HintText>Each copy is a tradable NFT granting read access (max {COPIES_MAX}).</HintText>
           </Field>
         </FormCol>
 

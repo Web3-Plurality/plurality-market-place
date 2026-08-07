@@ -112,6 +112,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
   const [processingLabel, setProcessingLabel] = useState('');
   const [listingTokenId, setListingTokenId] = useState<number | null>(null);
   const [listingPrice, setListingPrice] = useState('');
+  const [listingAmount, setListingAmount] = useState('1');
 
 
   const getContractAddress = useCallback(async (): Promise<string | null> => {
@@ -120,15 +121,22 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
     return info?.nftAddress || null;
   }, []);
 
-  const handleList = useCallback(async (tokenId: number, price: string) => {
+  const handleList = useCallback(async (tokenId: number, price: string, amount: string) => {
     if (!price || isNaN(parseFloat(price))) {
       message.error('Please enter a valid price');
+      return;
+    }
+
+    const amountInt = parseInt(amount, 10);
+    if (!Number.isInteger(amountInt) || amountInt < 1) {
+      message.error('Please enter a valid number of copies (min 1)');
       return;
     }
 
     setProcessing(tokenId);
     setListingTokenId(null);
     setListingPrice('');
+    setListingAmount('1');
 
     try {
       const addr = await getContractAddress();
@@ -155,7 +163,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
         address: addr as `0x${string}`,
         abi: PluralityMemoryNFTABI,
         functionName: 'listBucket',
-        args: [BigInt(tokenId), priceWei],
+        args: [BigInt(tokenId), priceWei, BigInt(amountInt)],
       });
 
       setProcessingLabel('Confirming…');
@@ -168,7 +176,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
       const publicClient = createPublicClient({ chain, transport: http() });
       await publicClient.waitForTransactionReceipt({ hash: listTxHash });
 
-      await apiPost(`/blockchain/list/${tokenId}`, { price: priceWei.toString(), txHash: listTxHash });
+      await apiPost(`/blockchain/list/${tokenId}`, { txHash: listTxHash });
       message.success('NFT listed for sale!');
       onRefresh();
     } catch (error: any) {
@@ -245,7 +253,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
                 actions={
                   <ActionsRow>
                     {nft.tokenId && (
-                      nft.listingActive ? (
+                      nft.myListingActive ? (
                         <ActionButton
                           $variant="danger"
                           onClick={() => handleDelist(nft.tokenId!)}
@@ -276,16 +284,25 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
       <Modal
         title="List NFT for Sale"
         open={listingTokenId !== null}
-        onOk={() => listingTokenId && handleList(listingTokenId, listingPrice)}
-        onCancel={() => { setListingTokenId(null); setListingPrice(''); }}
+        onOk={() => listingTokenId && handleList(listingTokenId, listingPrice, listingAmount)}
+        onCancel={() => { setListingTokenId(null); setListingPrice(''); setListingAmount('1'); }}
         okText="List"
       >
-        <p>Set the price in TEST (Oasis Sapphire Testnet native token):</p>
+        <p style={{ marginBottom: 4 }}>Price per copy (TEST):</p>
         <Input
           placeholder="e.g. 0.1"
           value={listingPrice}
           onChange={(e) => setListingPrice(e.target.value)}
           suffix="TEST"
+        />
+        <p style={{ marginBottom: 4, marginTop: 12 }}>Copies to list:</p>
+        <Input
+          type="number"
+          min={1}
+          step={1}
+          placeholder="1"
+          value={listingAmount}
+          onChange={(e) => setListingAmount(e.target.value)}
         />
       </Modal>
 
@@ -296,10 +313,9 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
         onBuy={() => {}}
         isBuying={false}
         buyingLabel=""
-        isOwnListing={true}
-        // Buyers see only verified/unverified status — they don't own the
-        // underlying bucket, so registering on-chain belongs to the minter.
-        // Backend enforces this independently via resolveProfileAccess.
+        // "Your Listing" badge only when THIS wallet actually has a listing —
+        // not when the bucket merely has some (other seller's) listing.
+        isOwnListing={!!detailNft?.myListingActive}
       />
     </Container>
   );

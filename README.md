@@ -72,9 +72,9 @@ Contract addresses the UI talks to (Oasis Sapphire Testnet, chainId `23295`):
 
 | Contract | Address |
 |---|---|
-| ContextRegistry | `0x9A374905B2B286344fCac6f754dCF40F3cb427d5` |
-| PluralityMemoryNFT | `0xDe5dB30AE86e27F1E7EeC0AD353d910C4Ca93D08` |
-| ReputationRegistry | `0x8D0027e715943FB2f215c884369B744861331E3E` |
+| ContextRegistry | `0xDBED42F3e8b860831cFb0B67dd67400f900aEB9C` |
+| PluralityMemoryNFT | `0x83C5846569156ce0Dd4b988f3c2b510423B2fcdc` |
+| ReputationRegistry | `0xca998e6C770B84fbEE6319d16F4781bc1C9E9757` |
 
 ABIs live in [`src/abis/`](src/abis/). They are kept in sync with the deployed bytecode by [`scripts/deploy-market.ts`](../plurality-context-contracts/scripts/deploy-market.ts) in the contracts repo — re-running that script overwrites these files automatically.
 

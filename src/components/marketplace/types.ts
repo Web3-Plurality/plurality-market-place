@@ -18,6 +18,13 @@ export interface SnapshotContext {
   registeredOnChain: boolean;
 }
 
+/** One seller's active listing for a token (from /marketplace/listings/:tokenId). */
+export interface SellerListing {
+  seller: string; // wallet, lowercased
+  price: string; // PER-UNIT price in wei
+  amount: number; // units available from this seller
+}
+
 export interface NftSnapshot {
   id: string;
   tokenId: number | null;
@@ -36,8 +43,24 @@ export interface NftSnapshot {
   chain: string | null;
   ownerWallet?: string; // requires chain lookup; absent in v1 responses
   listingActive: boolean;
-  listingPrice: string | null;
+  listingPrice: string | null; // on browse = floor (min per-unit) across sellers
   importedProfileId?: string | null; // gone — no more auto-import on buy
+
+  // ── Limited-edition (multi-copy) fields ──────────────────────────
+  editionSize?: number; // copies minted (1..MAX_COPIES); 1 for legacy single mints
+  // Marketplace aggregate for the browse "one card per bucket" view:
+  floorPrice?: string | null; // min per-unit price across active sellers (wei)
+  copiesAvailable?: number; // total units listed across all sellers
+  sellerCount?: number; // number of distinct active sellers
+
+  // The CURRENT wallet's own listing on this token (from /my-nfts, /acquired-nfts).
+  // Distinct from listingActive (bucket-level "anyone listed") — this drives the
+  // List-vs-Delist button + the "Your Listing" badge for the holder.
+  myListingActive?: boolean;
+  myListingPrice?: string | null; // per-unit wei
+  myListingAmount?: number;
+  copiesOwned?: number; // how many copies of this edition the current wallet holds
+
   mintedAt: string | null;
   createdAt: string;
 

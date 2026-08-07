@@ -338,6 +338,9 @@ const AgentPage = () => {
     try {
       const list = await listBuckets({ includeMinted: true });
       setBuckets(list);
+      // No "All buckets" option anymore — default to the first bucket so the
+      // dropdown is never empty. Only fill in when nothing is selected yet.
+      setFocusedBucketId((cur) => cur ?? list[0]?.id ?? null);
     } catch (err) {
       console.error('[BYOK] Failed to load buckets:', err);
     }
@@ -498,14 +501,12 @@ const AgentPage = () => {
         <ChatToolbar>
           <ChatToolbarLabel>Context:</ChatToolbarLabel>
           <Select
-            value={focusedBucketId ?? ''}
-            onChange={(v) => setFocusedBucketId(v ? v : null)}
+            value={focusedBucketId ?? undefined}
+            onChange={(v) => setFocusedBucketId(v)}
             size="small"
             style={{ minWidth: 240 }}
-            options={[
-              { value: '', label: 'All buckets (auto-discover)' },
-              ...buckets.map((b) => ({ value: b.id, label: b.profileName })),
-            ]}
+            placeholder="Select a bucket"
+            options={buckets.map((b) => ({ value: b.id, label: b.profileName }))}
           />
           <Tooltip title="Refresh bucket list">
             <button

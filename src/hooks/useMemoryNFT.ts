@@ -10,6 +10,8 @@ export interface NftMintMetadata {
   tagline?: string;
   description?: string;
   coverImage?: string;
+  /** Number of NFT copies to mint (1..10). Each copy is a tradable read-access token. */
+  copies?: number;
 }
 
 /**
@@ -103,8 +105,10 @@ export function useMemoryNFT() {
   );
 
   // ── tx2: mint ──────────────────────────────────────────────────────────
-  const prepareMint = useCallback(async (profileId: string): Promise<MintPrepareResult> => {
-    const response = await apiPost(`/blockchain/mint/${profileId}/prepare-mint`, {});
+  // `copies` (1..10, default 1) mints N tradable read-access NFTs. The mint fee
+  // is flat regardless of copies — the backend echoes it back in `mintFee`.
+  const prepareMint = useCallback(async (profileId: string, copies = 1): Promise<MintPrepareResult> => {
+    const response = await apiPost(`/blockchain/mint/${profileId}/prepare-mint`, { copies });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.message || err.error || 'Failed to prepare mint');
