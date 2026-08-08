@@ -10,9 +10,8 @@ import { API_BASE_URL } from './env';
 
 type FetchOptions = Omit<RequestInit, 'credentials'>;
 
-// Flag to suppress error notifications after 401 logout redirect
+// Ensures the auth:unauthorized event fires only once per 401 logout redirect
 let isLoggingOut = false;
-export const isAuthLoggingOut = () => isLoggingOut;
 
 /**
  * Fetch wrapper that automatically includes credentials (cookies)
@@ -69,24 +68,6 @@ export const apiPost = async (
 };
 
 /**
- * PUT request with credentials and JSON body
- */
-export const apiPut = async (
-  endpoint: string,
-  body?: unknown,
-  headers?: HeadersInit
-): Promise<Response> => {
-  return apiFetch(endpoint, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-};
-
-/**
  * DELETE request with credentials
  */
 export const apiDelete = async (
@@ -96,23 +77,5 @@ export const apiDelete = async (
   return apiFetch(endpoint, {
     method: 'DELETE',
     headers,
-  });
-};
-
-/**
- * PATCH request with credentials and JSON body
- */
-export const apiPatch = async (
-  endpoint: string,
-  body?: unknown,
-  headers?: HeadersInit
-): Promise<Response> => {
-  return apiFetch(endpoint, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    body: body ? JSON.stringify(body) : undefined,
   });
 };

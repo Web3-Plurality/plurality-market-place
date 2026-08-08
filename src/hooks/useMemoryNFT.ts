@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { apiPost, apiGet } from '../utils/api';
+import { apiPost } from '../utils/api';
 import ContextRegistryABI from '../abis/ContextRegistry.json';
 import PluralityMemoryNFTABI from '../abis/PluralityMemoryNFT.json';
 
@@ -43,18 +43,6 @@ export interface MintPrepareResult {
   contractAddress: `0x${string}`;
   callData: `0x${string}`;
   mintFee: string;
-}
-
-export interface MintStatus {
-  // - not_minted: draft
-  // - frozen:     prepared for registration, tx1 not landed
-  // - registered: tx1 confirmed (contexts on-chain), tx2 not landed
-  // - minted:     tx2 confirmed (NFT exists)
-  status: 'not_minted' | 'frozen' | 'registered' | 'minted';
-  tokenId?: number;
-  txHash?: string;
-  bucketHash?: string;
-  mintedAt?: string;
 }
 
 /**
@@ -148,36 +136,6 @@ export function useMemoryNFT() {
     }
   }, []);
 
-  const getMintStatus = useCallback(async (profileId: string): Promise<MintStatus> => {
-    try {
-      const response = await apiGet(`/blockchain/mint/${profileId}/status`);
-      if (!response.ok) return { status: 'not_minted' };
-      return await response.json();
-    } catch {
-      return { status: 'not_minted' };
-    }
-  }, []);
-
-  const getContractInfo = useCallback(async () => {
-    try {
-      const response = await apiGet('/blockchain/contract-info');
-      if (!response.ok) return null;
-      return await response.json();
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const verifyContext = useCallback(async (contextId: string) => {
-    try {
-      const response = await apiGet(`/blockchain/verify/${contextId}`);
-      if (!response.ok) return null;
-      return await response.json();
-    } catch {
-      return null;
-    }
-  }, []);
-
   return {
     prepareRegistration,
     confirmRegistration,
@@ -185,8 +143,5 @@ export function useMemoryNFT() {
     confirmMint,
     cancelMint,
     uploadCover,
-    getMintStatus,
-    getContractInfo,
-    verifyContext,
   };
 }

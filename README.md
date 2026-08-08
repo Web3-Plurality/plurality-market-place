@@ -41,19 +41,8 @@ Fill in `.env`:
 # Backend (market-backend, NOT prod backend)
 VITE_APP_API_BASE_URL=http://localhost:5001
 
-# DEPRECATED — the UI is wallet-only. Leave as empty strings;
-# they'll be removed once src/utils/env.ts stops importing them.
-VITE_APP_PUBLIC_STYTCH_PROJECT_ID=
-VITE_APP_PUBLIC_STYTCH_TOKEN=
-
 # Market MCP server (used by Talk-to-Memory's BYOK agent only).
 VITE_APP_MCP_URL=http://localhost:5051/mcp
-
-# Where the agent fetches the OAuth-protected-resource discovery doc.
-# Local dev: the BACKEND serves the discovery doc, not the MCP server,
-# so this should point at the backend (defaults to VITE_APP_API_BASE_URL).
-# Production: same host as VITE_APP_MCP_URL (Traefik routes both).
-# VITE_APP_MCP_DISCOVERY_URL=http://localhost:5001
 ```
 
 ## Running

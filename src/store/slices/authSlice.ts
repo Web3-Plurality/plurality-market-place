@@ -6,8 +6,7 @@ export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   token: string | null;
-  googleJwtToken: string | null;
-  authMethod: 'google' | 'email' | 'metamask' | null;
+  authMethod: 'metamask' | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -16,7 +15,6 @@ const initialState: AuthState = {
   user: null,
   isAuthenticated: false,
   token: null,
-  googleJwtToken: null,
   authMethod: null,
   isLoading: false,
   error: null,
@@ -42,10 +40,7 @@ const authSlice = createSlice({
     setToken: (state, action: PayloadAction<string>) => {
       state.token = action.payload;
     },
-    setGoogleJwtToken: (state, action: PayloadAction<string | null>) => {
-      state.googleJwtToken = action.payload;
-    },
-    setAuthMethod: (state, action: PayloadAction<'google' | 'email' | 'metamask' | null>) => {
+    setAuthMethod: (state, action: PayloadAction<'metamask' | null>) => {
       state.authMethod = action.payload;
     },
     setError: (state, action: PayloadAction<string>) => {
@@ -56,12 +51,11 @@ const authSlice = createSlice({
       state.user = null;
       state.isAuthenticated = false;
       state.token = null;
-      state.googleJwtToken = null;
       state.authMethod = null;
       state.error = null;
     },
   },
 });
 
-export const { setLoading, setUser, updateUser, setToken, setGoogleJwtToken, setAuthMethod, setError, logout } = authSlice.actions;
+export const { setLoading, setUser, updateUser, setToken, setAuthMethod, setError, logout } = authSlice.actions;
 export default authSlice.reducer;

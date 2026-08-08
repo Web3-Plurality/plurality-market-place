@@ -17,7 +17,6 @@ export interface Bucket {
   createdAt: string;
   contextCount?: number;
   isOwner?: boolean;
-  role?: 'owner';
 
   /** Hash-as-identity / NFT-as-access-token state. A bucket is either:
    *  - a draft  (isImmutable=false, mintedTokenId=null) — editable by creator

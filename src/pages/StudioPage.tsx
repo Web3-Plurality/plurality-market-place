@@ -337,7 +337,6 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {b.isOwner === false && b.role && <span>{b.role}</span>}
                   {b.isOwner !== false && !b.isImmutable && (
                     <>
                       <MintBucketButton
