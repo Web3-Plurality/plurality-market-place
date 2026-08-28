@@ -24,8 +24,8 @@ The UI never holds an LLM API key on disk — Talk-to-Memory's BYOK key lives in
 ## Prerequisites
 
 - Node.js `20+`
-- A running [`plurality-market-backend`](../plurality-market-backend) at `http://localhost:5001`
-- (Optional, for Talk-to-Memory) a running [`plurality-market-mcp`](../plurality-market-mcp) at `http://localhost:5051`
+- A running [`plurality-market-backend`](https://github.com/Web3-Plurality/plurality-market-backend) at `http://localhost:5001`
+- (Optional, for Talk-to-Memory) a running [`plurality-market-mcp`](https://github.com/Web3-Plurality/plurality-market-mcp) at `http://localhost:5051`
 - MetaMask installed in the browser
 
 ## Setup
@@ -65,7 +65,7 @@ Contract addresses the UI talks to (Oasis Sapphire Testnet, chainId `23295`):
 | PluralityMemoryNFT | `0x83C5846569156ce0Dd4b988f3c2b510423B2fcdc` |
 | ReputationRegistry | `0xca998e6C770B84fbEE6319d16F4781bc1C9E9757` |
 
-ABIs live in [`src/abis/`](src/abis/). They are kept in sync with the deployed bytecode by [`scripts/deploy-market.ts`](../plurality-context-contracts/scripts/deploy-market.ts) in the contracts repo — re-running that script overwrites these files automatically.
+ABIs live in [`src/abis/`](src/abis/). They are kept in sync with the deployed bytecode by [`scripts/deploy-market.ts`](https://github.com/Web3-Plurality/plurality-context-contracts/blob/main/scripts/deploy-market.ts) in the contracts repo — re-running that script overwrites these files automatically.
 
 ## Troubleshooting
 
