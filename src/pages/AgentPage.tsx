@@ -6,12 +6,13 @@ import {
   MdSend,
   MdKey,
   MdLink,
-  MdLinkOff,
   MdSettings,
   MdExpandMore,
   MdExpandLess,
   MdBuild,
   MdRefresh,
+  MdClose,
+  MdErrorOutline,
 } from 'react-icons/md';
 import {
   PROVIDER_LABELS,
@@ -24,6 +25,7 @@ import {
 } from '../services/byokStorage';
 import { ByokMcpClient } from '../services/byokMcpClient';
 import { runTurn, type ChatMessage, type ToolTrace } from '../services/byokChat';
+import { describeMcpError, describeProviderError, type FriendlyError } from '../services/byokErrors';
 import { listBuckets, type Bucket } from '../services/bucketApi';
 import { MCP_URL } from '../utils/env';
 
@@ -64,68 +66,10 @@ const Subtitle = styled.p`
   margin: 0;
 `;
 
-const StatusPill = styled.div<{ $ok: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  background: ${({ $ok }) => ($ok ? 'rgba(52, 211, 153, 0.12)' : 'rgba(255, 255, 255, 0.05)')};
-  color: ${({ $ok }) => ($ok ? '#34d399' : 'rgba(255, 255, 255, 0.55)')};
-  border: 1px solid ${({ $ok }) => ($ok ? 'rgba(52, 211, 153, 0.35)' : 'rgba(255, 255, 255, 0.08)')};
-`;
-
-// ─── Settings Panel ───────────────────────────────────────────────────────
-
-const SettingsCard = styled.div`
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(20, 22, 40, 0.55) 0%, rgba(12, 14, 28, 0.55) 100%);
-`;
-
-const SettingsToggle = styled.button`
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-`;
-
-const SettingsBody = styled.div`
-  padding: 0 16px 16px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-`;
-
-const Field = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`;
-
-const Label = styled.label`
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 500;
-`;
-
-const InlineHint = styled.div`
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  margin-top: 2px;
-`;
-
 // ─── Chat Panel ───────────────────────────────────────────────────────────
 
 const ChatCard = styled.div`
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -151,6 +95,108 @@ const ChatToolbarLabel = styled.span`
   font-weight: 500;
   letter-spacing: 0.3px;
 `;
+
+const ToolbarButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.06);
+  }
+`;
+
+// Gear + status dot: settings live behind this button so they take no space
+// when the user isn't configuring anything.
+const GearButton = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ $active }) => ($active ? 'rgba(139, 92, 246, 0.5)' : 'rgba(255, 255, 255, 0.1)')};
+  background: ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.18)' : 'rgba(255, 255, 255, 0.04)')};
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+`;
+
+const StatusDot = styled.span<{ $ok: boolean }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $ok }) => ($ok ? '#34d399' : '#fbbf24')};
+  box-shadow: 0 0 6px ${({ $ok }) => ($ok ? 'rgba(52, 211, 153, 0.7)' : 'rgba(251, 191, 36, 0.7)')};
+`;
+
+// ─── Settings dropdown panel (anchored under the toolbar gear) ────────────
+
+const SettingsPanel = styled.div`
+  position: absolute;
+  top: 46px;
+  right: 12px;
+  z-index: 20;
+  width: 380px;
+  max-width: calc(100% - 24px);
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(24, 26, 46, 0.98) 0%, rgba(14, 16, 32, 0.98) 100%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+const PanelHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+`;
+
+const FieldRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+`;
+
+const Field = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const Label = styled.label`
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+`;
+
+const InlineHint = styled.div`
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 2px;
+`;
+
+// ─── Messages ─────────────────────────────────────────────────────────────
 
 const Messages = styled.div`
   flex: 1;
@@ -205,6 +251,82 @@ const TraceItem = styled.div<{ $error?: boolean }>`
   color: ${({ $error }) => ($error ? '#fca5a5' : 'inherit')};
 `;
 
+// ─── Failure notice (replaces the old raw "Error: …" bubble) ─────────────
+
+const ErrorCard = styled.div`
+  align-self: flex-start;
+  max-width: 78%;
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+`;
+
+const ErrorTitle = styled.div`
+  font-weight: 700;
+  color: #fca5a5;
+  margin-bottom: 2px;
+`;
+
+const ErrorHint = styled.div`
+  color: rgba(255, 255, 255, 0.78);
+`;
+
+const ErrorActions = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+`;
+
+const ErrorButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: rgba(139, 92, 246, 0.6);
+    background: rgba(99, 102, 241, 0.18);
+  }
+`;
+
+const ErrorDetails = styled.details`
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+
+  summary {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  pre {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+    color: rgba(255, 255, 255, 0.65);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 160px;
+    overflow: auto;
+  }
+`;
+
 const InputRow = styled.div`
   display: flex;
   align-items: stretch;
@@ -229,14 +351,94 @@ const SendButton = styled.button`
   &:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 `;
 
+// ─── Welcoming empty state ────────────────────────────────────────────────
+
 const Empty = styled.div`
   margin: auto;
   text-align: center;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
   font-size: 13px;
-  max-width: 360px;
-  line-height: 1.5;
+  max-width: 420px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 `;
+
+const EmptyIconWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(236, 72, 153, 0.22));
+  color: #c7d2fe;
+  margin-bottom: 4px;
+`;
+
+const EmptyTitle = styled.div`
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+`;
+
+const SetupButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  &:hover { transform: translateY(-1px); }
+`;
+
+const SuggestionRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+`;
+
+const SuggestionChip = styled.button`
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: rgba(139, 92, 246, 0.5);
+    background: rgba(99, 102, 241, 0.15);
+    color: #fff;
+  }
+`;
+
+const SUGGESTIONS = [
+  'What do you know about me?',
+  'Summarize what’s in this bucket',
+  'What did I save most recently?',
+];
+
+// Where to get a key, per provider — shown under the key input so people
+// don't paste a key for the wrong Google product (a very common mistake).
+const KEY_HINTS: Record<Provider, string> = {
+  google: 'Gemini key from Google AI Studio (aistudio.google.com/app/apikey), starts with "AIza". Not a Custom Search / Maps key.',
+  anthropic: 'From console.anthropic.com → API keys, starts with "sk-ant-".',
+  openai: 'From platform.openai.com → API keys, starts with "sk-".',
+};
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -251,7 +453,7 @@ const AgentPage = () => {
   // effect — without this split, every keystroke triggered a reconnect.
   const [patInput, setPatInput] = useState<string>('');
   const [committedPat, setCommittedPat] = useState<string>('');
-  const [settingsOpen, setSettingsOpen] = useState<boolean>(true);
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
 
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -371,25 +573,42 @@ const AgentPage = () => {
     const newHistory = [...history, { role: 'user' as const, content: text }];
     setHistory(newHistory);
 
+    // Failure notices live in the chat for the user, but never go back to the
+    // LLM as "assistant" turns — that would pollute its context.
+    const llmHistory = history.filter((m) => !m.error);
+    const fail = (friendly: FriendlyError) => {
+      antdMessage.error(friendly.title);
+      setHistory([...newHistory, { role: 'assistant', content: friendly.title, error: friendly }]);
+    };
+
     try {
       // Lazy MCP connect — first send eats the handshake (~0.5s); subsequent
       // sends reuse the cached client. Throws if PAT is invalid or MCP is
-      // unreachable; we surface that as an error message in the chat.
-      const mcp = await getOrCreateMcpClient(committedPat);
-      const reply = await runTurn(provider, {
-        apiKey,
-        model,
-        mcp,
-        history,
-        userMessage: text,
-        focusedBucket,
-      });
-      setHistory([...newHistory, reply]);
-    } catch (err) {
-      console.error('[BYOK] Chat turn failed:', err);
-      const errText = err instanceof Error ? err.message : 'Unknown error';
-      antdMessage.error(errText);
-      setHistory([...newHistory, { role: 'assistant', content: `Error: ${errText}` }]);
+      // unreachable. Handled separately from the LLM call so the notice can
+      // point at the right fix (token vs. API key).
+      let mcp;
+      try {
+        mcp = await getOrCreateMcpClient(committedPat);
+      } catch (err) {
+        console.error('[BYOK] MCP connect failed:', err);
+        fail(describeMcpError(err));
+        return;
+      }
+
+      try {
+        const reply = await runTurn(provider, {
+          apiKey,
+          model,
+          mcp,
+          history: llmHistory,
+          userMessage: text,
+          focusedBucket,
+        });
+        setHistory([...newHistory, reply]);
+      } catch (err) {
+        console.error('[BYOK] Chat turn failed:', err);
+        fail(describeProviderError(provider, model, err));
+      }
     } finally {
       setBusy(false);
     }
@@ -405,59 +624,78 @@ const AgentPage = () => {
     [send],
   );
 
-  const statusLabel = useMemo(() => {
-    if (!apiKey) return 'Add an API key to start';
-    if (!committedPat) return 'Add an MCP PAT to start';
-    if (busy) return 'Working…';
-    return 'Ready';
-  }, [apiKey, committedPat, busy]);
-
   return (
     <Container>
       <Header>
         <TitleBlock>
           <Title>Talk to Memory</Title>
           <Subtitle>
-            Paste your own LLM key (browser-only, never sent to our backend) and chat against your
-            memory buckets through MCP.
+            Chat with everything you&rsquo;ve saved in your memory buckets. Your AI key stays in
+            your browser — it&rsquo;s never sent to our servers.
           </Subtitle>
         </TitleBlock>
-        <StatusPill $ok={ready}>
-          {ready ? <MdLink size={14} /> : <MdLinkOff size={14} />}
-          {statusLabel}
-        </StatusPill>
       </Header>
 
-      <SettingsCard>
-        <SettingsToggle onClick={() => setSettingsOpen((v) => !v)}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <MdSettings size={16} />
-            Settings
-          </span>
-          {settingsOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-        </SettingsToggle>
+      <ChatCard>
+        <ChatToolbar>
+          <ChatToolbarLabel>Memory bucket:</ChatToolbarLabel>
+          <Tooltip title="The chat searches and reads only this bucket">
+            <Select
+              value={focusedBucketId ?? undefined}
+              onChange={(v) => setFocusedBucketId(v)}
+              size="small"
+              style={{ minWidth: 240 }}
+              placeholder="Select a bucket"
+              options={buckets.map((b) => ({ value: b.id, label: b.profileName }))}
+            />
+          </Tooltip>
+          <Tooltip title="Refresh bucket list">
+            <ToolbarButton type="button" onClick={() => void refreshBuckets()}>
+              <MdRefresh size={16} />
+            </ToolbarButton>
+          </Tooltip>
+          <Tooltip title={ready ? 'AI provider connected' : 'Setup needed — add your keys here'}>
+            <GearButton $active={settingsOpen} onClick={() => setSettingsOpen((v) => !v)}>
+              <MdSettings size={14} />
+              Settings
+              <StatusDot $ok={ready} />
+            </GearButton>
+          </Tooltip>
+        </ChatToolbar>
+
         {settingsOpen && (
-          <SettingsBody>
+          <SettingsPanel>
+            <PanelHeader>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <MdSettings size={14} />
+                AI provider setup
+              </span>
+              <ToolbarButton type="button" onClick={() => setSettingsOpen(false)}>
+                <MdClose size={16} />
+              </ToolbarButton>
+            </PanelHeader>
+            <FieldRow>
+              <Field>
+                <Label>Provider</Label>
+                <Select
+                  value={provider}
+                  onChange={handleProviderChange}
+                  options={(Object.keys(PROVIDER_LABELS) as Provider[]).map((p) => ({
+                    value: p,
+                    label: PROVIDER_LABELS[p],
+                  }))}
+                />
+              </Field>
+              <Field>
+                <Label>Model</Label>
+                <Select
+                  value={model}
+                  onChange={handleModelChange}
+                  options={SUGGESTED_MODELS[provider].map((m) => ({ value: m, label: m }))}
+                />
+              </Field>
+            </FieldRow>
             <Field>
-              <Label>Provider</Label>
-              <Select
-                value={provider}
-                onChange={handleProviderChange}
-                options={(Object.keys(PROVIDER_LABELS) as Provider[]).map((p) => ({
-                  value: p,
-                  label: PROVIDER_LABELS[p],
-                }))}
-              />
-            </Field>
-            <Field>
-              <Label>Model</Label>
-              <Select
-                value={model}
-                onChange={handleModelChange}
-                options={SUGGESTED_MODELS[provider].map((m) => ({ value: m, label: m }))}
-              />
-            </Field>
-            <Field style={{ gridColumn: '1 / -1' }}>
               <Label>
                 <MdKey size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
                 {PROVIDER_LABELS[provider]} API key
@@ -474,14 +712,14 @@ const AgentPage = () => {
                 }
               />
               <InlineHint>
-                Kept in memory for this page session only. Never POSTed to the Plurality backend.
-                Refresh = re-paste.
+                {KEY_HINTS[provider]} Stays in your browser for this visit only — never sent to our
+                servers.
               </InlineHint>
             </Field>
-            <Field style={{ gridColumn: '1 / -1' }}>
+            <Field>
               <Label>
                 <MdLink size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                MCP Personal Access Token
+                Memory access token
               </Label>
               <Input.Password
                 value={patInput}
@@ -490,69 +728,78 @@ const AgentPage = () => {
                 placeholder="plur_pat_…"
               />
               <InlineHint>
-                Create one in the user menu (top-right) → <strong>API tokens</strong> → Generate
-                new token. MCP endpoint: <code>{MCP_URL}</code>
+                Create one in the user menu (top-right) → <strong>API tokens</strong>. Endpoint:{' '}
+                <code>{MCP_URL}</code>
               </InlineHint>
             </Field>
-          </SettingsBody>
+          </SettingsPanel>
         )}
-      </SettingsCard>
-      <ChatCard>
-        <ChatToolbar>
-          <ChatToolbarLabel>Context:</ChatToolbarLabel>
-          <Select
-            value={focusedBucketId ?? undefined}
-            onChange={(v) => setFocusedBucketId(v)}
-            size="small"
-            style={{ minWidth: 240 }}
-            placeholder="Select a bucket"
-            options={buckets.map((b) => ({ value: b.id, label: b.profileName }))}
-          />
-          <Tooltip title="Refresh bucket list">
-            <button
-              type="button"
-              onClick={() => void refreshBuckets()}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 26,
-                height: 26,
-                border: 'none',
-                borderRadius: 6,
-                background: 'transparent',
-                color: 'rgba(255,255,255,0.55)',
-                cursor: 'pointer',
-              }}
-            >
-              <MdRefresh size={16} />
-            </button>
-          </Tooltip>
-          {focusedBucket && (
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-              LLM is told to scope tool calls to this bucket
-            </span>
-          )}
-        </ChatToolbar>
+
         <Messages>
           {history.length === 0 && !busy ? (
             <Empty>
-              <MdSmartToy size={36} style={{ opacity: 0.5, marginBottom: 8 }} />
-              <div>
-                Configure provider + LLM key, then connect MCP (OAuth or PAT) above. Ask anything
-                about your memory buckets.
-              </div>
+              <EmptyIconWrap>
+                <MdSmartToy size={32} />
+              </EmptyIconWrap>
+              <EmptyTitle>Talk to your memory</EmptyTitle>
+              {ready ? (
+                <>
+                  <div>Pick a memory bucket above and ask anything — try one of these:</div>
+                  <SuggestionRow>
+                    {SUGGESTIONS.map((s) => (
+                      <SuggestionChip key={s} onClick={() => setDraft(s)}>
+                        {s}
+                      </SuggestionChip>
+                    ))}
+                  </SuggestionRow>
+                </>
+              ) : (
+                <>
+                  <div>
+                    A one-minute setup gets you chatting: choose your AI provider, paste its API
+                    key, and add a memory access token.
+                  </div>
+                  <SetupButton onClick={() => setSettingsOpen(true)}>
+                    <MdSettings size={16} />
+                    Set up your keys
+                  </SetupButton>
+                </>
+              )}
             </Empty>
           ) : (
-            history.map((m, i) => (
-              <div
-                key={i}
-                style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}
-              >
-                <Bubble $role={m.role}>{m.content}</Bubble>
-                {m.trace && m.trace.length > 0 && <TraceView trace={m.trace} />}
-              </div>
-            ))
+            history.map((m, i) =>
+              m.error ? (
+                <ErrorCard key={i}>
+                  <MdErrorOutline size={20} style={{ flexShrink: 0, marginTop: 1, color: '#fca5a5' }} />
+                  <div style={{ minWidth: 0 }}>
+                    <ErrorTitle>{m.error.title}</ErrorTitle>
+                    <ErrorHint>{m.error.hint}</ErrorHint>
+                    {m.error.action && (
+                      <ErrorActions>
+                        <ErrorButton onClick={() => setSettingsOpen(true)}>
+                          <MdSettings size={14} />
+                          {m.error.action === 'tokens' ? 'Open Settings (token)' : 'Open Settings'}
+                        </ErrorButton>
+                      </ErrorActions>
+                    )}
+                    {m.error.details && (
+                      <ErrorDetails>
+                        <summary>Technical details</summary>
+                        <pre>{m.error.details}</pre>
+                      </ErrorDetails>
+                    )}
+                  </div>
+                </ErrorCard>
+              ) : (
+                <div
+                  key={i}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}
+                >
+                  <Bubble $role={m.role}>{m.content}</Bubble>
+                  {m.trace && m.trace.length > 0 && <TraceView trace={m.trace} />}
+                </div>
+              ),
+            )
           )}
           {busy && (
             <div style={{ alignSelf: 'flex-start', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
@@ -566,7 +813,7 @@ const AgentPage = () => {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKey}
-            placeholder={ready ? 'Ask about your memory buckets…' : 'Set provider + LLM key + MCP PAT to start'}
+            placeholder={ready ? 'Ask about your memory buckets…' : 'Set up your keys (Settings, top right) to start chatting'}
             autoSize={{ minRows: 1, maxRows: 5 }}
             disabled={!ready || busy}
           />

@@ -6,11 +6,12 @@ const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 `;
-import { MdOpenInNew, MdVerified, MdShield, MdShoppingCart, MdHistory, MdToken, MdSell, MdShoppingBag, MdDownload, MdSync } from 'react-icons/md';
+import { MdOpenInNew, MdVerified, MdShield, MdShoppingCart, MdHistory, MdToken, MdSell, MdShoppingBag, MdDownload, MdSync, MdVisibility } from 'react-icons/md';
 import { useAccount, useWriteContract, useSwitchChain, usePublicClient } from 'wagmi';
 import { formatEther } from 'viem';
 import OwnerIdenticon from './OwnerIdenticon';
 import NftReviews from './NftReviews';
+import ContextContentModal from '../content/ContextContentModal';
 import { apiGet, apiPost } from '../../utils/api';
 import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
 import { oasisSapphireTestnet } from '../../services/wagmi';
@@ -118,6 +119,26 @@ const ContextTypeBadge = styled.span`
   background: ${({ theme }) => theme.colors.backgroundSecondary};
   color: ${({ theme }) => theme.colors.textMuted};
   margin-right: 8px;
+`;
+
+const ViewContentButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.textMuted};
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.textPrimary};
+    background: ${({ theme }) => theme.colors.backgroundHover};
+  }
 `;
 
 const StatusBadge = styled.span<{ $verified: boolean; $clickable?: boolean }>`
@@ -784,6 +805,10 @@ const NftDetailModal = ({
   // part of mint (tx1), so by the time a NFT exists in this modal, every
   // context is already on-chain. Nothing to wire post-mint.
 
+  // Holder-side content viewer (My Minted / Acquired). Browse's previewOnly
+  // path never lists contexts, so this can't open there.
+  const [viewCtx, setViewCtx] = useState<{ id: string; title: string } | null>(null);
+
   if (!nft) return null;
 
   const priceDisplay = nft.listingPrice ? formatEther(BigInt(nft.listingPrice)) : '?';
@@ -823,179 +848,10 @@ const NftDetailModal = ({
         {nft.tokenId && <TokenBadge>#{nft.tokenId}</TokenBadge>}
       </Header>
 
-      <Section>
-        <SectionLabel>Details</SectionLabel>
-        <InfoRow>
-          Mint Date: <InfoValue>{mintDate}</InfoValue>
-        </InfoRow>
-        <InfoRow>
-          Chain: <InfoValue>{nft.chain || 'Oasis Sapphire Testnet'}</InfoValue>
-        </InfoRow>
-        {nft.editionSize && nft.editionSize > 1 && (
-          <InfoRow>
-            Edition: <InfoValue>{nft.editionSize} copies</InfoValue>
-          </InfoRow>
-        )}
-        {myCopies !== null && myCopies > 0 && (
-          <InfoRow>
-            Copies you own:{' '}
-            <InfoValue>
-              {myCopies}
-              {nft.editionSize ? ` of ${nft.editionSize}` : ''}
-            </InfoValue>
-          </InfoRow>
-        )}
-        {explorerUrl && (
-          <InfoRow>
-            <ExplorerLink href={explorerUrl} target="_blank" rel="noopener noreferrer">
-              View on Explorer <MdOpenInNew size={12} />
-            </ExplorerLink>
-          </InfoRow>
-        )}
-      </Section>
-
-      {nft.ownerWallet && (
-        <Section>
-          <SectionLabel>Owner</SectionLabel>
-          <OwnerRow>
-            <OwnerIdenticon address={nft.ownerWallet} size={28} />
-            <span>{truncateAddress(nft.ownerWallet)}</span>
-          </OwnerRow>
-        </Section>
-      )}
-
-      <Section>
-        <SectionLabel>
-          Contexts {previewOnly ? (
-            <>({previewCount}/{previewCount} verified on-chain)</>
-          ) : checkingContexts ? (
-            <SpinLabel>
-              <MdSync size={12} /> verifying...
-            </SpinLabel>
-          ) : (
-            <>({verifiedCount}/{totalContexts} verified on-chain)</>
-          )}
-        </SectionLabel>
-        {previewOnly ? (
-          <InfoRow>
-            <InfoValue>
-              {previewCount > 0
-                ? `${previewCount} context${previewCount === 1 ? '' : 's'}, all verified on-chain. Contents are revealed to the NFT holder after purchase.`
-                : 'No contexts in this bucket.'}
-            </InfoValue>
-          </InfoRow>
-        ) : totalContexts > 0 ? (
-          <ContextListContainer>
-            {contexts.map((ctx) => {
-              const verified = isContextVerified(ctx);
-              return (
-                <ContextRow key={ctx.contextId}>
-                  <ContextTitle>{ctx.title}</ContextTitle>
-                  <ContextTypeBadge>{ctx.sourceType}</ContextTypeBadge>
-                  <StatusBadge $verified={verified} $clickable={false}>
-                    {verified ? (
-                      <span className="status-default">
-                        <MdVerified size={12} /> Verified
-                      </span>
-                    ) : (
-                      <span className="status-default">
-                        <MdShield size={12} /> Unverified
-                      </span>
-                    )}
-                  </StatusBadge>
-                </ContextRow>
-              );
-            })}
-          </ContextListContainer>
-        ) : contextsError ? (
-          <InfoRow>
-            <InfoValue style={{ color: '#f87171' }}>
-              Failed to load contexts: {contextsError}
-            </InfoValue>
-          </InfoRow>
-        ) : (
-          <InfoRow>
-            <InfoValue>No contexts in this snapshot</InfoValue>
-          </InfoRow>
-        )}
-      </Section>
-
-      {history.length > 0 && (
-        <Section>
-          <SectionLabel>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <MdHistory size={14} /> Transaction History ({history.length})
-            </span>
-          </SectionLabel>
-          <Timeline>
-            {/* Collapsed: only the 3 most recent events. Multi-copy editions
-                rack up a long list of list/buy events fast. */}
-            {(historyExpanded ? history : history.slice(-3)).map((evt, i, arr) => {
-              const config = EVENT_CONFIG[evt.event] || { icon: <MdHistory size={16} />, color: '#999' };
-              const isLast = i === arr.length - 1;
-              return (
-                <TimelineItem key={`${evt.event}-${i}`}>
-                  <div style={{ position: 'relative' }}>
-                    <TimelineDot $color={config.color}>{config.icon}</TimelineDot>
-                    {!isLast && <TimelineLine />}
-                  </div>
-                  <TimelineContent>
-                    <TimelineEvent>{evt.event}</TimelineEvent>
-                    <TimelineDetail>
-                      <span>{new Date(evt.timestamp).toLocaleDateString()}</span>
-                      {evt.from && (
-                        <span>
-                          from <TimelineAddr>{truncateAddress(evt.from)}</TimelineAddr>
-                        </span>
-                      )}
-                      {evt.to && (
-                        <span>
-                          to <TimelineAddr>{truncateAddress(evt.to)}</TimelineAddr>
-                        </span>
-                      )}
-                      {evt.price && (
-                        <TimelinePrice>{formatEther(BigInt(evt.price))} TEST</TimelinePrice>
-                      )}
-                      {evt.txHash && (
-                        <ExplorerLink
-                          href={`https://explorer.oasis.io/testnet/sapphire/tx/${evt.txHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          tx <MdOpenInNew size={10} />
-                        </ExplorerLink>
-                      )}
-                    </TimelineDetail>
-                  </TimelineContent>
-                </TimelineItem>
-              );
-            })}
-          </Timeline>
-          {history.length > 3 && (
-            <HistoryToggle onClick={() => setHistoryExpanded((v) => !v)}>
-              {historyExpanded ? 'Show less' : `Show all ${history.length} transactions`}
-            </HistoryToggle>
-          )}
-        </Section>
-      )}
-
-      {/* On-chain reviews (ERC-8004 ReputationRegistry). Needs a tokenId
-          (the agentId) — pending mints have none yet. */}
-      {nft.tokenId && (
-        <>
-          <Divider />
-          <Section>
-            <NftReviews tokenId={nft.tokenId} />
-          </Section>
-        </>
-      )}
-
-      {/* Browse path: multi-seller buy surface. A bucket has copies spread
-          across holders; the buyer picks a seller + quantity here (buying can't
-          happen from the browse card, which only shows the aggregate). */}
+      {/* Buy surface first — Amazon-style ordering: purchase on top, the
+          descriptive sections below, reviews at the very end. */}
       {showSellerPicker ? (
         <>
-          <Divider />
           <Section>
             <SectionLabel>
               Buy a copy {loadingSellers ? (
@@ -1088,6 +944,7 @@ const NftDetailModal = ({
               </>
             )}
           </Section>
+          <Divider />
         </>
       ) : (
         /* Owner-viewed path (My Minted / Acquired): show "Your Listing" + your
@@ -1096,7 +953,6 @@ const NftDetailModal = ({
            can't buy a token you already own. */
         isOwnListing && (
           <>
-            <Divider />
             <PriceSection>
               <PriceDisplay>
                 {nft.myListingPrice ? formatEther(BigInt(nft.myListingPrice)) : priceDisplay}
@@ -1106,9 +962,191 @@ const NftDetailModal = ({
               </PriceDisplay>
               <OwnBadge>Your Listing</OwnBadge>
             </PriceSection>
+            <Divider />
           </>
         )
       )}
+
+      <Section>
+        <SectionLabel>Details</SectionLabel>
+        <InfoRow>
+          Mint Date: <InfoValue>{mintDate}</InfoValue>
+        </InfoRow>
+        <InfoRow>
+          Chain: <InfoValue>{nft.chain || 'Oasis Sapphire Testnet'}</InfoValue>
+        </InfoRow>
+        {nft.editionSize && nft.editionSize > 1 && (
+          <InfoRow>
+            Edition: <InfoValue>{nft.editionSize} copies</InfoValue>
+          </InfoRow>
+        )}
+        {myCopies !== null && myCopies > 0 && (
+          <InfoRow>
+            Copies you own:{' '}
+            <InfoValue>
+              {myCopies}
+              {nft.editionSize ? ` of ${nft.editionSize}` : ''}
+            </InfoValue>
+          </InfoRow>
+        )}
+        {explorerUrl && (
+          <InfoRow>
+            <ExplorerLink href={explorerUrl} target="_blank" rel="noopener noreferrer">
+              View on Explorer <MdOpenInNew size={12} />
+            </ExplorerLink>
+          </InfoRow>
+        )}
+      </Section>
+
+      {nft.ownerWallet && (
+        <Section>
+          <SectionLabel>Owner</SectionLabel>
+          <OwnerRow>
+            <OwnerIdenticon address={nft.ownerWallet} size={28} />
+            <span>{truncateAddress(nft.ownerWallet)}</span>
+          </OwnerRow>
+        </Section>
+      )}
+
+      <Section>
+        <SectionLabel>
+          Contexts {previewOnly ? (
+            <>({previewCount}/{previewCount} verified on-chain)</>
+          ) : checkingContexts ? (
+            <SpinLabel>
+              <MdSync size={12} /> verifying...
+            </SpinLabel>
+          ) : (
+            <>({verifiedCount}/{totalContexts} verified on-chain)</>
+          )}
+        </SectionLabel>
+        {previewOnly ? (
+          <InfoRow>
+            <InfoValue>
+              {previewCount > 0
+                ? `${previewCount} context${previewCount === 1 ? '' : 's'}, all verified on-chain. Contents are revealed to the NFT holder after purchase.`
+                : 'No contexts in this bucket.'}
+            </InfoValue>
+          </InfoRow>
+        ) : totalContexts > 0 ? (
+          <ContextListContainer>
+            {contexts.map((ctx) => {
+              const verified = isContextVerified(ctx);
+              return (
+                <ContextRow key={ctx.contextId}>
+                  <ContextTitle>{ctx.title}</ContextTitle>
+                  <ContextTypeBadge>{ctx.sourceType}</ContextTypeBadge>
+                  <StatusBadge $verified={verified} $clickable={false}>
+                    {verified ? (
+                      <span className="status-default">
+                        <MdVerified size={12} /> Verified
+                      </span>
+                    ) : (
+                      <span className="status-default">
+                        <MdShield size={12} /> Unverified
+                      </span>
+                    )}
+                  </StatusBadge>
+                  <ViewContentButton
+                    type="button"
+                    title="View content"
+                    onClick={() => setViewCtx({ id: ctx.contextId, title: ctx.title })}
+                  >
+                    <MdVisibility size={15} />
+                  </ViewContentButton>
+                </ContextRow>
+              );
+            })}
+          </ContextListContainer>
+        ) : contextsError ? (
+          <InfoRow>
+            <InfoValue style={{ color: '#f87171' }}>
+              Failed to load contexts: {contextsError}
+            </InfoValue>
+          </InfoRow>
+        ) : (
+          <InfoRow>
+            <InfoValue>No contexts in this snapshot</InfoValue>
+          </InfoRow>
+        )}
+      </Section>
+
+      {history.length > 0 && (
+        <Section>
+          <SectionLabel>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <MdHistory size={14} /> Transaction History ({history.length})
+            </span>
+          </SectionLabel>
+          <Timeline>
+            {/* Collapsed: only the 3 most recent events. Multi-copy editions
+                rack up a long list of list/buy events fast. */}
+            {(historyExpanded ? history : history.slice(-3)).map((evt, i, arr) => {
+              const config = EVENT_CONFIG[evt.event] || { icon: <MdHistory size={16} />, color: '#999' };
+              const isLast = i === arr.length - 1;
+              return (
+                <TimelineItem key={`${evt.event}-${i}`}>
+                  <div style={{ position: 'relative' }}>
+                    <TimelineDot $color={config.color}>{config.icon}</TimelineDot>
+                    {!isLast && <TimelineLine />}
+                  </div>
+                  <TimelineContent>
+                    <TimelineEvent>{evt.event}</TimelineEvent>
+                    <TimelineDetail>
+                      <span>{new Date(evt.timestamp).toLocaleDateString()}</span>
+                      {evt.from && (
+                        <span>
+                          from <TimelineAddr>{truncateAddress(evt.from)}</TimelineAddr>
+                        </span>
+                      )}
+                      {evt.to && (
+                        <span>
+                          to <TimelineAddr>{truncateAddress(evt.to)}</TimelineAddr>
+                        </span>
+                      )}
+                      {evt.price && (
+                        <TimelinePrice>{formatEther(BigInt(evt.price))} TEST</TimelinePrice>
+                      )}
+                      {evt.txHash && (
+                        <ExplorerLink
+                          href={`https://explorer.oasis.io/testnet/sapphire/tx/${evt.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          tx <MdOpenInNew size={10} />
+                        </ExplorerLink>
+                      )}
+                    </TimelineDetail>
+                  </TimelineContent>
+                </TimelineItem>
+              );
+            })}
+          </Timeline>
+          {history.length > 3 && (
+            <HistoryToggle onClick={() => setHistoryExpanded((v) => !v)}>
+              {historyExpanded ? 'Show less' : `Show all ${history.length} transactions`}
+            </HistoryToggle>
+          )}
+        </Section>
+      )}
+
+      {/* On-chain reviews (ERC-8004 ReputationRegistry). Needs a tokenId
+          (the agentId) — pending mints have none yet. */}
+      {nft.tokenId && (
+        <>
+          <Divider />
+          <Section>
+            <NftReviews tokenId={nft.tokenId} />
+          </Section>
+        </>
+      )}
+
+      <ContextContentModal
+        open={!!viewCtx}
+        contextId={viewCtx?.id ?? null}
+        title={viewCtx?.title}
+        onClose={() => setViewCtx(null)}
+      />
     </Modal>
   );
 };

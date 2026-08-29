@@ -4,7 +4,6 @@ import {
   Modal,
   Input,
   Select,
-  Checkbox,
   Tag,
   Tooltip,
   Spin,
@@ -17,7 +16,6 @@ import {
   MdDelete,
   MdKey,
   MdArrowBack,
-  MdCheckCircle,
   MdWarning,
 } from 'react-icons/md';
 import {
@@ -25,7 +23,6 @@ import {
   createPat,
   revokePat,
   type PatRow,
-  type PatScope,
   type PatCreatedRecord,
   type CreatePatPayload,
 } from '../../services/patApi';
@@ -37,11 +34,11 @@ interface Props {
 
 type View = 'list' | 'create' | 'reveal';
 
-const ALL_SCOPES: { value: PatScope; label: string; hint: string }[] = [
-  { value: 'mcp:tools', label: 'mcp:tools', hint: 'Full read + write (catch-all)' },
-  { value: 'mcp:tools:read', label: 'mcp:tools:read', hint: 'Read-only — search, list, fetch' },
-  { value: 'mcp:tools:write', label: 'mcp:tools:write', hint: 'Write — save, create, append' },
-];
+// The MCP server only honours the catch-all `mcp:tools` scope — the finer
+// read/write scopes exist in the backend's data model but grant nothing yet,
+// so a token minted with only those would be rejected with 403. Don't expose
+// a picker that can produce a token that doesn't work.
+const DEFAULT_SCOPES: CreatePatPayload['scopes'] = ['mcp:tools'];
 
 const EXPIRY_OPTIONS = [
   { value: '7', label: '7 days' },
@@ -171,6 +168,18 @@ const TopRow = styled.div`
   gap: 8px;
 `;
 
+const IntroNote = styled.div`
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  line-height: 1.55;
+`;
+
 const Field = styled.div`
   display: flex;
   flex-direction: column;
@@ -188,17 +197,17 @@ const Hint = styled.div`
   color: rgba(255, 255, 255, 0.5);
 `;
 
-const ScopeRow = styled.label`
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
-  cursor: pointer;
+const NextSteps = styled.ol`
+  margin: 0;
+  padding: 12px 14px 12px 32px;
+  border-radius: 10px;
+  background: rgba(52, 211, 153, 0.06);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 1.6;
 
-  &:hover { border-color: rgba(99, 102, 241, 0.25); }
+  li + li { margin-top: 4px; }
 `;
 
 const RevealBanner = styled.div`
@@ -238,7 +247,6 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
 
   // Create form state
   const [name, setName] = useState('');
-  const [selectedScopes, setSelectedScopes] = useState<PatScope[]>(['mcp:tools']);
   const [expiresIn, setExpiresIn] = useState<string>('30');
 
   // Reveal state (one-shot plaintext)
@@ -247,7 +255,6 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
   const reset = useCallback(() => {
     setView('list');
     setName('');
-    setSelectedScopes(['mcp:tools']);
     setExpiresIn('30');
     setCreated(null);
   }, []);
@@ -276,15 +283,11 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
       message.error('Name is required');
       return;
     }
-    if (selectedScopes.length === 0) {
-      message.error('Pick at least one scope');
-      return;
-    }
     setSubmitting(true);
     try {
       const payload: CreatePatPayload = {
         name: trimmed,
-        scopes: selectedScopes,
+        scopes: DEFAULT_SCOPES,
         expiresIn: expiresIn === 'never' ? 'never' : parseInt(expiresIn, 10),
       };
       const record = await createPat(payload);
@@ -296,7 +299,7 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
     } finally {
       setSubmitting(false);
     }
-  }, [name, selectedScopes, expiresIn, refresh]);
+  }, [name, expiresIn, refresh]);
 
   const handleRevoke = useCallback(
     async (id: string) => {
@@ -348,16 +351,15 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
       <Wrap>
         {view === 'list' && (
           <>
-            <TopRow>
-              <Hint>
-                Personal access tokens authenticate MCP clients (Talk to Memory, Claude Code) to
-                your memory buckets.
-              </Hint>
-              <PrimaryBtn onClick={() => setView('create')}>
-                <MdAdd size={16} />
-                Generate new token
-              </PrimaryBtn>
-            </TopRow>
+            <IntroNote>
+              <MdKey size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                A token is like a password that lets an AI app read your memory buckets — the{' '}
+                <b>Talk to Memory</b> chat on this site, or tools like Claude Code on your
+                computer. Generate one, paste it into the app, and revoke it here anytime to cut
+                that app&apos;s access.
+              </div>
+            </IntroNote>
 
             {loading ? (
               <ListEmpty>
@@ -365,10 +367,20 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
               </ListEmpty>
             ) : tokens.length === 0 ? (
               <ListEmpty>
-                You haven&apos;t generated any tokens yet. Click <b>Generate new token</b> to create
-                your first one.
+                <div style={{ marginBottom: 14 }}>You don&apos;t have any tokens yet.</div>
+                <PrimaryBtn onClick={() => setView('create')}>
+                  <MdAdd size={16} />
+                  Generate your first token
+                </PrimaryBtn>
               </ListEmpty>
             ) : (
+              <>
+              <TopRow style={{ justifyContent: 'flex-end' }}>
+                <PrimaryBtn onClick={() => setView('create')}>
+                  <MdAdd size={16} />
+                  Generate new token
+                </PrimaryBtn>
+              </TopRow>
               <TokenList>
                 {tokens.map((t) => (
                   <TokenRow key={t.id} $inactive={t.status !== 'active'}>
@@ -380,11 +392,6 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
                             {t.status}
                           </Tag>
                         )}
-                        {t.scopes.map((s) => (
-                          <Tag key={s} style={{ margin: 0, fontSize: 10 }}>
-                            {s}
-                          </Tag>
-                        ))}
                       </TokenName>
                       <TokenMeta>
                         <TokenPrefix>{t.tokenPrefix}…</TokenPrefix>
@@ -416,6 +423,7 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
                   </TokenRow>
                 ))}
               </TokenList>
+              </>
             )}
           </>
         )}
@@ -428,47 +436,25 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
             </SecondaryBtn>
 
             <Field>
-              <Label>Token name</Label>
+              <Label>Where will you use this token?</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. claude-code-laptop"
+                placeholder="e.g. Talk to Memory, or Claude Code on my laptop"
                 maxLength={100}
                 autoFocus
               />
-              <Hint>So you can recognize this token later. Required.</Hint>
+              <Hint>Just a label so you can recognise it in the list later.</Hint>
             </Field>
 
             <Field>
-              <Label>Expiration</Label>
+              <Label>Stops working after</Label>
               <Select
                 value={expiresIn}
                 onChange={setExpiresIn}
                 options={EXPIRY_OPTIONS}
               />
-            </Field>
-
-            <Field>
-              <Label>Scopes</Label>
-              <Hint>What this token is allowed to do via MCP. Pick at least one.</Hint>
-              {ALL_SCOPES.map((s) => (
-                <ScopeRow key={s.value}>
-                  <Checkbox
-                    checked={selectedScopes.includes(s.value)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedScopes((prev) => Array.from(new Set([...prev, s.value])));
-                      } else {
-                        setSelectedScopes((prev) => prev.filter((x) => x !== s.value));
-                      }
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{s.label}</span>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>{s.hint}</span>
-                  </div>
-                </ScopeRow>
-              ))}
+              <Hint>Shorter is safer. You can always revoke a token early, or make a new one.</Hint>
             </Field>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -503,13 +489,25 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
                 </Tooltip>
               </RevealValue>
               <Hint>
-                <MdCheckCircle size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />
-                Scopes: {created.scopes.join(', ')}
-                {' · '}
                 {created.expiresAt
-                  ? `Expires ${formatAbsolute(created.expiresAt)}`
-                  : 'No expiration'}
+                  ? `Stops working ${formatAbsolute(created.expiresAt)}`
+                  : 'Never expires'}
               </Hint>
+            </Field>
+
+            <Field>
+              <Label>What to do with it</Label>
+              <NextSteps>
+                <li>Copy the token above.</li>
+                <li>
+                  <b>Talk to Memory</b> (on this site): open the chat → <b>Settings</b> → paste it
+                  into <b>Memory access token</b>.
+                </li>
+                <li>
+                  <b>Claude Code / Cursor / other MCP apps</b>: add this site&apos;s MCP endpoint and
+                  use the token as the <code>Bearer</code> authorization value.
+                </li>
+              </NextSteps>
             </Field>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>

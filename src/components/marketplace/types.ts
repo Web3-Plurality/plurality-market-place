@@ -35,6 +35,8 @@ export interface NftSnapshot {
   tagline: string | null;
   description: string | null;
   coverImage: string | null;
+  /** Marketplace category key (see categories.ts); null for legacy mints. */
+  category?: string | null;
   contexts?: SnapshotContext[]; // dropped from backend; left optional for UI compat
   contextCount?: number;        // batch-counted by backend (replaces contexts.length on cards)
   metadataURI: string | null;

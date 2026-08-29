@@ -32,6 +32,12 @@ export interface ChatMessage {
   content: string;
   /** Tool calls performed by this assistant turn (if any). */
   trace?: ToolTrace[];
+  /**
+   * Set when this entry is a failure notice rendered in the chat, not a real
+   * assistant reply. Entries with `error` are excluded from the history sent
+   * to the LLM. Shape lives in byokErrors.ts.
+   */
+  error?: { title: string; hint: string; details: string; action?: 'settings' | 'tokens' };
 }
 
 export interface RunTurnOptions {

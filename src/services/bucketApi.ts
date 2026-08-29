@@ -108,9 +108,16 @@ export async function listContexts(profileId: string): Promise<BucketContext[]> 
   return data.contexts || [];
 }
 
-/** POST /ai/context/add-raw-context — adds a plain-text context. */
-export async function addRawContext(profileId: string, context: string): Promise<BucketContext> {
-  const response = await apiPost('/ai/context/add-raw-context', { profileId, context });
+/** POST /ai/context/add-raw-context — adds a plain-text context. `title` is
+ *  optional: when given it wins over the AI-extracted title. */
+export async function addRawContext(
+  profileId: string,
+  context: string,
+  title?: string,
+): Promise<BucketContext> {
+  const body: Record<string, unknown> = { profileId, context };
+  if (title && title.trim()) body.title = title.trim();
+  const response = await apiPost('/ai/context/add-raw-context', body);
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || `Failed to add context (${response.status})`);
@@ -137,6 +144,41 @@ export async function uploadFile(profileId: string, file: File): Promise<BucketC
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || `Failed to upload file (${response.status})`);
+  }
+  return response.json();
+}
+
+export interface ContextContentPage {
+  contextId: string;
+  title: string;
+  description: string;
+  contentType: string;
+  sourceType: string;
+  sourcePlatform: string;
+  originalFileName: string;
+  totalChunks: number;
+  /** The requested chunk range, already joined into one readable string. */
+  content: string;
+  /** Next chunk index to request, or null when this page was the last. */
+  nextChunk: number | null;
+}
+
+/**
+ * GET /ai/context/:contextId/content — paginated read of a stored item's
+ * text (the same endpoint the MCP `read_context` tool uses). Readable by the
+ * bucket's creator and by anyone holding the bucket's NFT.
+ */
+export async function getContextContent(
+  contextId: string,
+  startChunk = 0,
+  limit = 20,
+): Promise<ContextContentPage> {
+  const response = await apiGet(
+    `/ai/context/${encodeURIComponent(contextId)}/content?startChunk=${startChunk}&limit=${limit}`,
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to load content (${response.status})`);
   }
   return response.json();
 }
