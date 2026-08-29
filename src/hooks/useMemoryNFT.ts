@@ -10,6 +10,8 @@ export interface NftMintMetadata {
   tagline?: string;
   description?: string;
   coverImage?: string;
+  /** Marketplace category key (see components/marketplace/categories.ts). */
+  category?: string;
   /** Number of NFT copies to mint (1..10). Each copy is a tradable read-access token. */
   copies?: number;
 }

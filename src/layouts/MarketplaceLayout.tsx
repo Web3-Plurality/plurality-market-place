@@ -3,10 +3,11 @@ import { Navigate, NavLink, Routes, Route } from 'react-router-dom';
 import styled, { keyframes, css } from 'styled-components';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Dropdown, message } from 'antd';
-import { MdAccountBalanceWallet, MdLogout, MdStorefront, MdSmartToy, MdKey, MdExpandMore } from 'react-icons/md';
+import { MdAccountBalanceWallet, MdLogout, MdStorefront, MdSmartToy, MdKey, MdExpandMore, MdDashboard } from 'react-icons/md';
 import { useAppSelector } from '../hooks/useAppStore';
 import { useLogout } from '../hooks/useLogout';
 import MarketplaceDashboard from '../components/marketplace/MarketplaceDashboard';
+import MyPlayground from '../components/marketplace/MyPlayground';
 import AgentPage from '../pages/AgentPage';
 import TokensManagerDialog from '../components/settings/TokensManagerDialog';
 
@@ -40,10 +41,16 @@ const Header = styled.header`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 10px;
   padding: 14px 28px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: linear-gradient(180deg, rgba(8, 10, 22, 0.92) 0%, rgba(8, 10, 22, 0.78) 100%);
   flex-shrink: 0;
+
+  @media (max-width: 720px) {
+    padding: 10px 14px;
+  }
 `;
 
 const HeaderLeft = styled.div`
@@ -67,6 +74,10 @@ const BrandWord = styled.span`
   -webkit-background-clip: text;
           background-clip: text;
   -webkit-text-fill-color: transparent;
+
+  @media (max-width: 400px) {
+    display: none;
+  }
 `;
 
 const HeaderRight = styled.div`
@@ -84,6 +95,14 @@ const NavTabs = styled.nav`
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
+
+  /* Small screens: the pill can't fit between brand and wallet — drop it onto
+     its own full-width row (brand + wallet stay on row one). */
+  @media (max-width: 720px) {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
 `;
 
 const tabActiveStyles = css`
@@ -335,6 +354,10 @@ const MarketplaceLayoutInner = () => {
             <MdStorefront size={15} />
             Marketplace
           </NavTab>
+          <NavTab to="/marketplace/playground">
+            <MdDashboard size={15} />
+            My Playground
+          </NavTab>
           <NavTab to="/marketplace/agent">
             <MdSmartToy size={15} />
             Talk to Memory
@@ -390,6 +413,7 @@ const MarketplaceLayoutInner = () => {
           {/* /marketplace/studio collapsed into the Drafts tab inside c2c. */}
           <Route path="studio" element={<Navigate to="../c2c" replace />} />
           <Route path="c2c" element={<MarketplaceDashboard />} />
+          <Route path="playground" element={<MyPlayground />} />
           <Route path="agent" element={<AgentPage />} />
           <Route path="*" element={<Navigate to="c2c" replace />} />
         </Routes>
