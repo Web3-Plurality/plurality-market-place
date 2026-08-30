@@ -3,6 +3,10 @@ name: Manual Release Docker Image Prod
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write        # push images to ghcr.io
+
 jobs:
   semantic_release:
     runs-on: ubuntu-latest
@@ -18,15 +22,15 @@ jobs:
           git config --global user.name "semantic-release-bot"
 
       - name: Docker Login
-        run: docker login --username ${{ secrets.GHCR_USERNAME }} --password ${{ secrets.GHCR_TOKEN }} ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username ${{ github.actor }} --password-stdin
 
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
-          token: ${{ secrets.GHCR_TOKEN }}
+          fetch-depth: 0   # tags needed for git describe
 
       - name: Set up Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: 20
 
@@ -38,9 +42,11 @@ jobs:
         run: |
           cp .env.production.example .env.production
 
-      - name: Get Version from package.json
+      - name: Get version from latest git tag
         id: get_version
-        run: echo "VERSION=$(jq -r '.version' package.json)" >> $GITHUB_ENV
+        run: |
+          V=$(git describe --tags --abbrev=0)
+          echo "VERSION=${V#v}" >> $GITHUB_ENV
 
       - name: Build and Push Docker Image
         run: |

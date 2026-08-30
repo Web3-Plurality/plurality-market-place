@@ -12,14 +12,10 @@ module.exports = {
           && docker push ghcr.io/web3-plurality/plurality-market-place-pre:latest \\
           && docker tag ghcr.io/web3-plurality/plurality-market-place-pre:latest ghcr.io/web3-plurality/plurality-market-place-pre:\${nextRelease.version} \\
           && docker push ghcr.io/web3-plurality/plurality-market-place-pre:\${nextRelease.version}
-         `
+         `,
+        'successCmd': 'echo "version=${nextRelease.version}" >> $GITHUB_OUTPUT'
       }
     ],
-    '@semantic-release/git',
     '@semantic-release/github'
   ],
-  'git': {
-    'assets': ['package.json'],
-    'message': 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
-  }
 };
