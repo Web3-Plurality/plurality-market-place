@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Modal, Input, InputNumber, message, Spin } from 'antd';
 import { MdCloudUpload, MdToken, MdImage } from 'react-icons/md';
 import type { NftMintMetadata } from '../../hooks/useMemoryNFT';
+import { CATEGORIES } from '../marketplace/categories';
 
 interface MintNftDialogProps {
   open: boolean;
@@ -175,6 +176,36 @@ const PreviewFooter = styled.div`
   color: rgba(255, 255, 255, 0.55);
 `;
 
+const CategoryGrid = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+`;
+
+const CategoryChip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid ${({ $active }) => ($active ? 'transparent' : 'rgba(255, 255, 255, 0.12)')};
+  background: ${({ $active }) =>
+    $active
+      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95) 0%, rgba(139, 92, 246, 0.95) 100%)'
+      : 'rgba(255, 255, 255, 0.04)'};
+  color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.7)')};
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: #fff;
+    border-color: ${({ $active }) => ($active ? 'transparent' : 'rgba(139, 92, 246, 0.5)')};
+  }
+`;
+
 const HiddenFile = styled.input.attrs({ type: 'file', accept: 'image/*' })`
   display: none;
 `;
@@ -193,6 +224,7 @@ const MintNftDialog = ({
   const [tagline, setTagline] = useState('');
   const [description, setDescription] = useState('');
   const [copies, setCopies] = useState<number>(COPIES_MIN);
+  const [category, setCategory] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverLocalLoading, setCoverLocalLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -212,10 +244,11 @@ const MintNftDialog = ({
       Number.isInteger(copies) &&
       copies >= COPIES_MIN &&
       copies <= COPIES_MAX &&
+      !!category &&
       !!coverUrl &&
       !uploading &&
       !submitting,
-    [trimmedTitle, trimmedTagline, trimmedDescription, copies, coverUrl, uploading, submitting],
+    [trimmedTitle, trimmedTagline, trimmedDescription, copies, category, coverUrl, uploading, submitting],
   );
 
   const handleFile = useCallback(
@@ -256,6 +289,7 @@ const MintNftDialog = ({
       tagline: trimmedTagline,
       description: trimmedDescription,
       coverImage: coverUrl || undefined,
+      category: category || undefined,
       copies,
     });
   };
@@ -373,6 +407,26 @@ const MintNftDialog = ({
               style={{ resize: 'none' }}
             />
             <Counter>{trimmedDescription.length}/{DESCRIPTION_MAX}</Counter>
+          </Field>
+
+          <Field>
+            <Label>
+              Category<Required>*</Required>
+            </Label>
+            <CategoryGrid>
+              {CATEGORIES.map((c) => (
+                <CategoryChip
+                  key={c.key}
+                  type="button"
+                  $active={category === c.key}
+                  title={c.blurb}
+                  onClick={() => setCategory(c.key)}
+                >
+                  <span>{c.emoji}</span>
+                  {c.label}
+                </CategoryChip>
+              ))}
+            </CategoryGrid>
           </Field>
 
           <Field>

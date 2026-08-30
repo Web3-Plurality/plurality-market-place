@@ -238,12 +238,15 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
 
   const handleDelete = useCallback(
     async (b: Bucket) => {
+      const hideLoading = message.loading(`Deleting "${b.profileName}"…`, 0);
       try {
         await deleteBucket(b.id);
         message.success(`Deleted "${b.profileName}"`);
         await refresh();
       } catch (err) {
         message.error(err instanceof Error ? err.message : 'Failed to delete bucket');
+      } finally {
+        hideLoading();
       }
     },
     [refresh],

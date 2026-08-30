@@ -10,6 +10,7 @@ import {
   MdError,
   MdHourglassEmpty,
   MdLockOutline,
+  MdVisibility,
 } from 'react-icons/md';
 import {
   listContexts,
@@ -19,6 +20,7 @@ import {
   type BucketContext,
 } from '../../services/bucketApi';
 import { useSSE, type SSEContextUpdate } from '../../hooks/useSSE';
+import ContextContentModal from './ContextContentModal';
 
 interface BucketDetailDialogProps {
   open: boolean;
@@ -272,6 +274,14 @@ const IconButton = styled.button`
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 
+// Same footprint as IconButton but a "look" affordance, not a destructive one.
+const ViewIconButton = styled(IconButton)`
+  &:hover {
+    color: #c7d2fe;
+    background: rgba(99, 102, 241, 0.15);
+  }
+`;
+
 const EmptyContexts = styled.div`
   text-align: center;
   padding: 32px 16px;
@@ -307,6 +317,8 @@ const BucketDetailDialog = ({
   const [adding, setAdding] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [titleInput, setTitleInput] = useState('');
+  const [viewCtx, setViewCtx] = useState<{ id: string; title: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const trimmedText = textInput.trim();
@@ -380,9 +392,10 @@ const BucketDetailDialog = ({
     if (!bucketId || !canSubmitText) return;
     setAdding(true);
     try {
-      await addRawContext(bucketId, trimmedText);
+      await addRawContext(bucketId, trimmedText, titleInput);
       await refreshContexts();
       setTextInput('');
+      setTitleInput('');
       message.success('Context added');
     } catch (err: unknown) {
       console.error(err);
@@ -391,7 +404,7 @@ const BucketDetailDialog = ({
     } finally {
       setAdding(false);
     }
-  }, [bucketId, canSubmitText, trimmedText, refreshContexts]);
+  }, [bucketId, canSubmitText, trimmedText, titleInput, refreshContexts]);
 
   const handleSubmitFile = useCallback(
     async (file: File) => {
@@ -448,6 +461,8 @@ const BucketDetailDialog = ({
   const handleClose = () => {
     if (adding) return; // don't close mid-upload
     setTextInput('');
+    setTitleInput('');
+    setViewCtx(null);
     setDragging(false);
     setAddTab('text');
     onClose();
@@ -491,6 +506,15 @@ const BucketDetailDialog = ({
 
             {addTab === 'text' ? (
               <FormCard>
+                <FormLabel>
+                  Title <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span>
+                </FormLabel>
+                <Input
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  maxLength={120}
+                  placeholder="e.g. Notes from Monday's meeting — leave blank and we'll suggest one"
+                />
                 <FormLabel>Paste or type the text you want to remember</FormLabel>
                 <Input.TextArea
                   value={textInput}
@@ -501,6 +525,7 @@ const BucketDetailDialog = ({
                 />
                 <Counter>{trimmedText.length}/{TEXT_MAX}</Counter>
                 <PrimaryButton onClick={handleSubmitText} disabled={!canSubmitText}>
+                  {adding && <Spin size="small" />}
                   {adding ? 'Adding…' : 'Add to bucket'}
                 </PrimaryButton>
               </FormCard>
@@ -515,8 +540,8 @@ const BucketDetailDialog = ({
                   onDrop={handleDrop}
                   onClick={() => !adding && fileInputRef.current?.click()}
                 >
-                  <MdUploadFile size={28} />
-                  <div>{adding ? 'Uploading…' : dragging ? 'Drop to upload' : 'Drag & drop or click'}</div>
+                  {adding ? <Spin /> : <MdUploadFile size={28} />}
+                  <div>{adding ? 'Uploading & indexing…' : dragging ? 'Drop to upload' : 'Drag & drop or click'}</div>
                   <div style={{ fontSize: 11, opacity: 0.6 }}>
                     PDF, DOCX, TXT, MD, and more · up to 10MB
                   </div>
@@ -557,7 +582,10 @@ const BucketDetailDialog = ({
           ) : (
             <ContextList>
               {contexts.map((ctx) => (
-                <ContextRow key={ctx.contextId}>
+                <ContextRow
+                  key={ctx.contextId}
+                  style={{ opacity: deletingId === ctx.contextId ? 0.5 : 1 }}
+                >
                   <ContextInfo>
                     <ContextTitle>{ctx.title || 'Untitled'}</ContextTitle>
                     <ContextMeta>
@@ -577,13 +605,27 @@ const BucketDetailDialog = ({
                     </StatusBadge>
                   </Tooltip>
 
+                  {ctx.status === 'completed' && (
+                    <Tooltip title="View content">
+                      <ViewIconButton
+                        onClick={() => setViewCtx({ id: ctx.contextId, title: ctx.title || 'Untitled' })}
+                      >
+                        <MdVisibility size={16} />
+                      </ViewIconButton>
+                    </Tooltip>
+                  )}
+
                   {!readOnly && (
-                    <Tooltip title="Delete context">
+                    <Tooltip title={deletingId === ctx.contextId ? 'Deleting…' : 'Delete context'}>
                       <IconButton
                         onClick={() => handleDelete(ctx.contextId)}
                         disabled={deletingId === ctx.contextId}
                       >
-                        <MdDelete size={16} />
+                        {deletingId === ctx.contextId ? (
+                          <Spin size="small" />
+                        ) : (
+                          <MdDelete size={16} />
+                        )}
                       </IconButton>
                     </Tooltip>
                   )}
@@ -593,6 +635,13 @@ const BucketDetailDialog = ({
           )}
         </div>
       </Container>
+
+      <ContextContentModal
+        open={!!viewCtx}
+        contextId={viewCtx?.id ?? null}
+        title={viewCtx?.title}
+        onClose={() => setViewCtx(null)}
+      />
     </Modal>
   );
 };

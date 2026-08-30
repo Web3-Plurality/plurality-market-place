@@ -1,268 +1,433 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled, { ThemeProvider } from 'styled-components';
-import { MdInventory2, MdToken, MdShoppingCart, MdStorefront } from 'react-icons/md';
+import { Select } from 'antd';
+import { MdSearch, MdRefresh, MdExpandMore } from 'react-icons/md';
+import { useNavigate } from 'react-router-dom';
+import { useAccount } from 'wagmi';
 import { apiGet } from '../../utils/api';
-import StudioPage from '../../pages/StudioPage';
-import MintedNftList from './MintedNftList';
-import AcquiredNftList from './AcquiredNftList';
+import { Container, marketplaceTheme } from './pageChrome';
+import { CATEGORIES } from './categories';
+import HeroSlider from './HeroSlider';
 import BrowseListings from './BrowseListings';
+import NftDetailModal from './NftDetailModal';
 import type { NftSnapshot } from './types';
 
-// Scoped palette for the marketplace dashboard — tuned so cards drawn by the
-// existing tab components (NftCard, BucketCard, etc.) render against the dark
-// glass panel without each file needing to be rewritten.
-const marketplacePalette = {
-  primary: '#8b5cf6',
-  primaryRgb: '139, 92, 246',
-  primaryGradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%)',
-  extensionAccent: '#a78bfa',
-  extensionAccentRgb: '167, 139, 250',
-  background: 'rgba(255, 255, 255, 0.02)',
-  backgroundSecondary: 'rgba(255, 255, 255, 0.04)',
-  backgroundGradient: 'linear-gradient(135deg, rgba(20, 22, 40, 0.5) 0%, rgba(12, 14, 28, 0.5) 100%)',
-  backgroundHover: 'rgba(255, 255, 255, 0.08)',
-  backgroundSelected: 'rgba(99, 102, 241, 0.18)',
-  textPrimary: '#ffffff',
-  textSecondary: 'rgba(255, 255, 255, 0.7)',
-  textMuted: 'rgba(255, 255, 255, 0.5)',
-  border: 'rgba(255, 255, 255, 0.08)',
-  borderLight: 'rgba(255, 255, 255, 0.04)',
-  shadowColor: 'rgba(0, 0, 0, 0.45)',
-  shadowPrimary: 'rgba(99, 102, 241, 0.35)',
-  success: '#34d399',
-  error: '#f87171',
-  warning: '#fbbf24',
-  info: '#22d3ee',
-};
+type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'most_contexts';
 
-const marketplaceTheme = {
-  mode: 'dark' as const,
-  isDark: true,
-  colors: marketplacePalette,
-};
+const HERO_SIZE = 5;
 
-const Container = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-`;
+// ─── Search bar (OpenSea-style pill: category picker | query) ────────────
 
-const TitleRow = styled.div`
-  margin-bottom: 24px;
-`;
-
-const PageTitle = styled.h1`
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0 0 6px;
-  letter-spacing: -0.3px;
-  background: linear-gradient(120deg, #ffffff 0%, #c7d2fe 50%, #f9a8d4 100%);
-  background-size: 200% 200%;
-  -webkit-background-clip: text;
-          background-clip: text;
-  -webkit-text-fill-color: transparent;
-`;
-
-const PageSubtitle = styled.p`
-  margin: 0;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.55);
-`;
-
-const TabBar = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px;
-  margin-bottom: 24px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  flex-wrap: wrap;
-`;
-
-const Tab = styled.button<{ $active: boolean }>`
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? 600 : 500)};
-  color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.6)')};
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95) 0%, rgba(139, 92, 246, 0.95) 50%, rgba(236, 72, 153, 0.95) 100%)'
-      : 'transparent'};
-  box-shadow: ${({ $active }) => ($active ? '0 8px 22px rgba(99, 102, 241, 0.35)' : 'none')};
-  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
-
-  &:hover {
-    color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.95)')};
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, rgba(99, 102, 241, 1) 0%, rgba(139, 92, 246, 1) 50%, rgba(236, 72, 153, 1) 100%)'
-        : 'rgba(255, 255, 255, 0.06)'};
-  }
-`;
-
-const Badge = styled.span<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
+const SearchRow = styled.div`
+  display: flex;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: ${({ $active }) => ($active ? 'rgba(255, 255, 255, 0.25)' : 'rgba(99, 102, 241, 0.25)')};
-  color: ${({ $active }) => ($active ? '#fff' : '#c7d2fe')};
-  font-size: 11px;
-  font-weight: 600;
+  margin: 4px 0 26px;
 `;
 
-const Panel = styled.div`
-  position: relative;
-  padding: 28px;
-  border-radius: 20px;
-  /* Solid-ish dark surface (no backdrop-filter) — keeps the look but avoids
-     stacking another GPU-blur layer on top of the page-level animations. */
-  background: linear-gradient(180deg, rgba(20, 22, 40, 0.92) 0%, rgba(12, 14, 28, 0.92) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+const SearchPill = styled.div`
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 760px;
+  height: 54px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
-  /* Subtle gradient halo border, same family as the login card */
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(236, 72, 153, 0.25) 50%, rgba(34, 211, 238, 0.25));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-            mask-composite: exclude;
-    opacity: 0.5;
-    pointer-events: none;
+  &:focus-within {
+    border-color: rgba(139, 92, 246, 0.75);
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18), 0 10px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  /* antd Select inside the pill: strip its chrome so it reads as one control. */
+  .ant-select {
+    height: 100%;
+    min-width: 170px;
+  }
+  .ant-select .ant-select-selector {
+    height: 100% !important;
+    padding: 0 12px 0 20px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: #fff !important;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+  }
+  .ant-select .ant-select-selection-item {
+    color: #fff !important;
+    line-height: 1 !important;
+  }
+  .ant-select .ant-select-arrow {
+    color: rgba(255, 255, 255, 0.6);
   }
 
   @media (max-width: 720px) {
-    padding: 18px;
-    border-radius: 16px;
+    height: 48px;
+    .ant-select { min-width: 60px; }
+    .ant-select .ant-select-selection-item span[data-label] { display: none; }
   }
 `;
 
-type TabKey = 'browse' | 'drafts' | 'minted' | 'acquired';
+const PillDivider = styled.span`
+  width: 1px;
+  height: 26px;
+  background: rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+`;
 
-const TAB_META: Record<TabKey, { title: string; subtitle: string }> = {
-  browse: {
-    title: 'Browse Marketplace',
-    subtitle: 'Discover memory NFTs minted by other users.',
-  },
-  drafts: {
-    title: 'My Drafts',
-    subtitle: 'Editable memory buckets. Once minted, they move to My Minted NFTs and become read-only.',
-  },
-  minted: {
-    title: 'My Minted NFTs',
-    subtitle: 'NFTs you minted from your own buckets. Sell on the marketplace to transfer ownership.',
-  },
-  acquired: {
-    title: 'Acquired NFTs',
-    subtitle: 'NFTs you purchased from other creators.',
-  },
-};
+const SearchIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px 0 16px;
+  color: rgba(255, 255, 255, 0.5);
+`;
+
+const SearchInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #fff;
+  font-size: 15px;
+  padding-right: 20px;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.42);
+  }
+`;
+
+// ─── Category pills (row under the hero) ─────────────────────────────────
+
+const Pills = styled.div`
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 26px 0 6px;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+`;
+
+const Pill = styled.button<{ $active: boolean }>`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid ${({ $active }) => ($active ? 'transparent' : 'rgba(255, 255, 255, 0.12)')};
+  background: ${({ $active }) =>
+    $active
+      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95) 0%, rgba(139, 92, 246, 0.95) 50%, rgba(236, 72, 153, 0.95) 100%)'
+      : 'rgba(255, 255, 255, 0.04)'};
+  color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.72)')};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: ${({ $active }) => ($active ? '0 8px 22px rgba(99, 102, 241, 0.35)' : 'none')};
+
+  &:hover {
+    color: #fff;
+    border-color: ${({ $active }) => ($active ? 'transparent' : 'rgba(139, 92, 246, 0.5)')};
+    background: ${({ $active }) =>
+      $active
+        ? 'linear-gradient(135deg, rgba(99, 102, 241, 1) 0%, rgba(139, 92, 246, 1) 50%, rgba(236, 72, 153, 1) 100%)'
+        : 'rgba(99, 102, 241, 0.15)'};
+  }
+`;
+
+const PillCount = styled.span<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  background: ${({ $active }) => ($active ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.08)')};
+  color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.6)')};
+`;
+
+// ─── Explore section header ──────────────────────────────────────────────
+
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 22px 0 16px;
+`;
+
+const SectionTitle = styled.h2`
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: #fff;
+
+  span {
+    margin-left: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+  }
+`;
+
+const SectionTools = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const SortSelect = styled(Select)`
+  min-width: 170px;
+
+  .ant-select-selector {
+    border-radius: 10px !important;
+    height: 38px !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: #fff !important;
+  }
+  .ant-select-selection-item {
+    color: #fff !important;
+  }
+  .ant-select-arrow {
+    color: rgba(255, 255, 255, 0.6);
+  }
+`;
+
+const RefreshButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: #fff;
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+`;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function sortListings(list: NftSnapshot[], sort: SortOption): NftSnapshot[] {
+  const clone = [...list];
+  const price = (n: NftSnapshot) => BigInt(n.floorPrice ?? n.listingPrice ?? '0');
+  switch (sort) {
+    case 'price_asc':
+      return clone.sort((a, b) => (price(a) < price(b) ? -1 : price(a) > price(b) ? 1 : 0));
+    case 'price_desc':
+      return clone.sort((a, b) => (price(a) > price(b) ? -1 : price(a) < price(b) ? 1 : 0));
+    case 'most_contexts':
+      return clone.sort(
+        (a, b) => (b.contextCount ?? b.contexts?.length ?? 0) - (a.contextCount ?? a.contexts?.length ?? 0),
+      );
+    case 'newest':
+    default:
+      return clone.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+}
+
+// Hero picks: newest listings, cover-image ones first so the slider looks
+// good, capped at HERO_SIZE.
+function pickFeatured(list: NftSnapshot[]): NftSnapshot[] {
+  const newest = sortListings(list, 'newest');
+  const withCover = newest.filter((n) => n.coverImage || n.profileImage);
+  const without = newest.filter((n) => !(n.coverImage || n.profileImage));
+  return [...withCover, ...without].slice(0, HERO_SIZE);
+}
+
+// ─── Homepage ────────────────────────────────────────────────────────────
 
 const MarketplaceDashboard = () => {
-  const [activeTab, setActiveTab] = useState<TabKey>('browse');
-  const [mintedNfts, setMintedNfts] = useState<NftSnapshot[]>([]);
-  const [acquiredNfts, setAcquiredNfts] = useState<NftSnapshot[]>([]);
-  const [loadingMinted, setLoadingMinted] = useState(false);
-  const [loadingAcquired, setLoadingAcquired] = useState(false);
+  const navigate = useNavigate();
+  const { address } = useAccount();
+  const [listings, setListings] = useState<NftSnapshot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string>('all');
+  const [sort, setSort] = useState<SortOption>('newest');
+  const [detailNft, setDetailNft] = useState<NftSnapshot | null>(null);
 
-  const fetchMintedNfts = useCallback(async () => {
-    setLoadingMinted(true);
+  const fetchListings = useCallback(async () => {
+    setLoading(true);
     try {
-      const nftsRes = await apiGet('/blockchain/my-nfts');
-      if (nftsRes.ok) {
-        const data = await nftsRes.json();
-        setMintedNfts(data.nfts || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch minted NFTs:', error);
-    } finally {
-      setLoadingMinted(false);
-    }
-  }, []);
-
-  const fetchAcquiredNfts = useCallback(async () => {
-    setLoadingAcquired(true);
-    try {
-      const response = await apiGet('/blockchain/acquired-nfts');
+      const response = await apiGet('/blockchain/marketplace/listings');
       if (response.ok) {
         const data = await response.json();
-        setAcquiredNfts(data.nfts || []);
+        setListings(data.listings || []);
       }
     } catch (error) {
-      console.error('Failed to fetch acquired NFTs:', error);
+      console.error('Failed to fetch listings:', error);
     } finally {
-      setLoadingAcquired(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchMintedNfts();
-    fetchAcquiredNfts();
-  }, [fetchMintedNfts, fetchAcquiredNfts]);
+    void fetchListings();
+  }, [fetchListings]);
 
+  const countsByCategory = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const n of listings) {
+      const key = n.category || 'other';
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [listings]);
+
+  const visible = useMemo(() => {
+    let result = listings;
+    if (category !== 'all') {
+      result = result.filter((n) => (n.category || 'other') === category);
+    }
+    const q = query.trim().toLowerCase();
+    if (q) {
+      result = result.filter((n) =>
+        [n.title, n.profileName, n.tagline, n.description]
+          .filter((s): s is string => !!s)
+          .some((s) => s.toLowerCase().includes(q)),
+      );
+    }
+    return sortListings(result, sort);
+  }, [listings, category, query, sort]);
+
+  const featured = useMemo(() => pickFeatured(listings), [listings]);
+  const isFiltered = category !== 'all' || query.trim().length > 0;
+
+  // Buying happens inside the detail modal; on success re-fetch so sold-out
+  // copies drop out of the grid and the hero.
   const handlePurchased = useCallback(() => {
-    fetchAcquiredNfts();
-  }, [fetchAcquiredNfts]);
+    setDetailNft(null);
+    void fetchListings();
+  }, [fetchListings]);
 
-  const meta = TAB_META[activeTab];
+  const categoryOptions = useMemo(
+    () => [
+      { value: 'all', label: <span>🌐 <span data-label>All categories</span></span> },
+      ...CATEGORIES.map((c) => ({
+        value: c.key,
+        label: (
+          <span>
+            {c.emoji} <span data-label>{c.label}</span>
+          </span>
+        ),
+      })),
+    ],
+    [],
+  );
 
   return (
-    <Container>
-      <TitleRow>
-        <PageTitle>{meta.title}</PageTitle>
-        <PageSubtitle>{meta.subtitle}</PageSubtitle>
-      </TitleRow>
+    <ThemeProvider theme={marketplaceTheme}>
+      <Container>
+        <SearchRow>
+          <SearchPill>
+            <Select
+              value={category}
+              onChange={(v) => setCategory(v as string)}
+              options={categoryOptions}
+              popupMatchSelectWidth={false}
+              variant="borderless"
+              suffixIcon={<MdExpandMore size={18} />}
+            />
+            <PillDivider />
+            <SearchIcon>
+              <MdSearch size={20} />
+            </SearchIcon>
+            <SearchInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search memories by title, topic or description…"
+              aria-label="Search marketplace"
+            />
+          </SearchPill>
+        </SearchRow>
 
-      <TabBar>
-        <Tab $active={activeTab === 'browse'} onClick={() => setActiveTab('browse')}>
-          <MdStorefront size={16} />
-          Browse
-        </Tab>
-        <Tab $active={activeTab === 'drafts'} onClick={() => setActiveTab('drafts')}>
-          <MdInventory2 size={16} />
-          My Drafts
-        </Tab>
-        <Tab $active={activeTab === 'minted'} onClick={() => setActiveTab('minted')}>
-          <MdToken size={16} />
-          My Minted NFTs
-          {mintedNfts.length > 0 && <Badge $active={activeTab === 'minted'}>{mintedNfts.length}</Badge>}
-        </Tab>
-        <Tab $active={activeTab === 'acquired'} onClick={() => setActiveTab('acquired')}>
-          <MdShoppingCart size={16} />
-          Acquired NFTs
-          {acquiredNfts.length > 0 && <Badge $active={activeTab === 'acquired'}>{acquiredNfts.length}</Badge>}
-        </Tab>
-      </TabBar>
+        <HeroSlider
+          items={featured}
+          onSelect={setDetailNft}
+          onEmptyCta={() => navigate('/marketplace/playground')}
+        />
 
-      <Panel>
-        <ThemeProvider theme={marketplaceTheme}>
-          {activeTab === 'browse' && <BrowseListings onPurchased={handlePurchased} />}
-          {/* StudioPage tells us whenever a draft is minted (moves to My Minted)
-              or a mint is cancelled (comes back as a draft). Either way the
-              minted list needs to refetch so it doesn't show a stale state. */}
-          {activeTab === 'drafts' && <StudioPage onBucketStateChanged={fetchMintedNfts} />}
-          {activeTab === 'minted' && <MintedNftList nfts={mintedNfts} loading={loadingMinted} onRefresh={fetchMintedNfts} />}
-          {activeTab === 'acquired' && <AcquiredNftList nfts={acquiredNfts} loading={loadingAcquired} onRefresh={fetchAcquiredNfts} />}
-        </ThemeProvider>
-      </Panel>
-    </Container>
+        <Pills>
+          <Pill $active={category === 'all'} onClick={() => setCategory('all')}>
+            🌐 All
+            <PillCount $active={category === 'all'}>{listings.length}</PillCount>
+          </Pill>
+          {CATEGORIES.map((c) => {
+            const n = countsByCategory[c.key] ?? 0;
+            return (
+              <Pill key={c.key} $active={category === c.key} onClick={() => setCategory(c.key)}>
+                <span>{c.emoji}</span>
+                {c.label}
+                {n > 0 && <PillCount $active={category === c.key}>{n}</PillCount>}
+              </Pill>
+            );
+          })}
+        </Pills>
+
+        <SectionHeader>
+          <SectionTitle>
+            Explore memories
+            <span>
+              {visible.length} item{visible.length === 1 ? '' : 's'}
+            </span>
+          </SectionTitle>
+          <SectionTools>
+            <SortSelect
+              value={sort}
+              onChange={(v) => setSort(v as SortOption)}
+              options={[
+                { value: 'newest', label: 'Recently listed' },
+                { value: 'price_asc', label: 'Price: low to high' },
+                { value: 'price_desc', label: 'Price: high to low' },
+                { value: 'most_contexts', label: 'Most contexts' },
+              ]}
+            />
+            <RefreshButton onClick={() => void fetchListings()}>
+              <MdRefresh size={14} />
+              Refresh
+            </RefreshButton>
+          </SectionTools>
+        </SectionHeader>
+
+        <BrowseListings listings={visible} loading={loading} filtered={isFiltered} onSelect={setDetailNft} />
+
+        <NftDetailModal
+          nft={detailNft}
+          open={!!detailNft}
+          onClose={() => setDetailNft(null)}
+          onBuy={() => {}}
+          isBuying={false}
+          buyingLabel=""
+          previewOnly
+          onPurchased={handlePurchased}
+          isOwnListing={
+            !!address && !!detailNft?.ownerWallet && detailNft.ownerWallet.toLowerCase() === address.toLowerCase()
+          }
+        />
+      </Container>
+    </ThemeProvider>
   );
 };
 
