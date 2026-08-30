@@ -13,7 +13,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@anthropic-ai/sdk": "^0.40.0",
-    "@google/generative-ai": "^0.24.0",
+    "@google/genai": "^2.19.0",
     "@metamask/sdk": "^0.33.1",
     "@modelcontextprotocol/sdk": "^1.18.0",
     "@reduxjs/toolkit": "^2.11.2",

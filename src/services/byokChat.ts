@@ -16,7 +16,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI, type Part } from '@google/genai';
 import type { Provider } from './byokStorage';
 import { ByokMcpClient } from './byokMcpClient';
 
@@ -352,33 +352,33 @@ export async function runGoogleTurn(opts: RunTurnOptions): Promise<ChatMessage> 
     onToolResult,
   } = opts;
 
-  const genAI = new GoogleGenerativeAI(apiKey);
+  // @google/genai (not the retired @google/generative-ai): it is the SDK
+  // Google maintains for the current key format ("AQ." keys) and model
+  // generations. Same tool-loop shape as the other providers.
+  const ai = new GoogleGenAI({ apiKey });
 
   const mcpTools = await mcp.listTools();
-  // Google's Schema type is stricter than open JSON Schema; pass MCP's
-  // inputSchema through as-is and cast — works for the common cases
-  // (object + properties + required) the MCP server emits.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tools: any =
+  const tools =
     mcpTools.length > 0
       ? [
           {
             functionDeclarations: mcpTools.map((t) => ({
               name: t.name,
               description: t.description,
-              parameters: googleifySchema(t.inputSchema),
+              // Raw JSON Schema is accepted here; we still inline $refs since
+              // Google's validator rejects $ref / $defs.
+              parametersJsonSchema: googleifySchema(t.inputSchema),
             })),
           },
         ]
       : undefined;
 
-  const modelInst = genAI.getGenerativeModel({
+  const chat = ai.chats.create({
     model,
-    tools,
-    systemInstruction: buildSystemPrompt(systemPrompt, focusedBucket),
-  });
-
-  const chat = modelInst.startChat({
+    config: {
+      systemInstruction: buildSystemPrompt(systemPrompt, focusedBucket),
+      tools,
+    },
     history: history.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
@@ -389,49 +389,40 @@ export async function runGoogleTurn(opts: RunTurnOptions): Promise<ChatMessage> 
   let finalText = '';
 
   // First turn: user's new message.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let result: any = await chat.sendMessage(userMessage);
+  let response = await chat.sendMessage({ message: userMessage });
 
   for (let i = 0; i < maxIterations; i++) {
-    const response = result.response;
-    const functionCalls: Array<{ name: string; args: Record<string, unknown> }> =
-      typeof response.functionCalls === 'function' ? response.functionCalls() || [] : [];
+    const functionCalls = response.functionCalls ?? [];
 
     if (functionCalls.length === 0) {
-      finalText = (typeof response.text === 'function' ? response.text() : '').trim();
+      finalText = (response.text ?? '').trim();
       break;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const functionResponses: any[] = [];
+    const functionResponses: Part[] = [];
     for (const fc of functionCalls) {
-      const input = (fc.args || {}) as Record<string, unknown>;
-      onToolCall?.(fc.name, input);
+      const name = fc.name ?? '';
+      const input = (fc.args ?? {}) as Record<string, unknown>;
+      onToolCall?.(name, input);
       try {
-        const mcpResult = await mcp.callTool(fc.name, input);
+        const mcpResult = await mcp.callTool(name, input);
         const text = ByokMcpClient.contentToText(mcpResult);
-        trace.push({ name: fc.name, input, output: text, isError: mcpResult.isError });
-        onToolResult?.(fc.name, text, mcpResult.isError === true);
+        trace.push({ name, input, output: text, isError: mcpResult.isError });
+        onToolResult?.(name, text, mcpResult.isError === true);
         functionResponses.push({
-          functionResponse: {
-            name: fc.name,
-            response: { content: text || '(empty)' },
-          },
+          functionResponse: { id: fc.id, name, response: { content: text || '(empty)' } },
         });
       } catch (err) {
         const errText = err instanceof Error ? err.message : String(err);
-        trace.push({ name: fc.name, input, output: errText, isError: true });
-        onToolResult?.(fc.name, errText, true);
+        trace.push({ name, input, output: errText, isError: true });
+        onToolResult?.(name, errText, true);
         functionResponses.push({
-          functionResponse: {
-            name: fc.name,
-            response: { error: errText },
-          },
+          functionResponse: { id: fc.id, name, response: { error: errText } },
         });
       }
     }
 
-    result = await chat.sendMessage(functionResponses);
+    response = await chat.sendMessage({ message: functionResponses });
   }
 
   return {
@@ -439,6 +430,34 @@ export async function runGoogleTurn(opts: RunTurnOptions): Promise<ChatMessage> 
     content: finalText || '(no response)',
     trace: trace.length ? trace : undefined,
   };
+}
+
+/**
+ * Models the given Gemini key can actually call. Google gates model
+ * generations per account (a key from a newer account gets 404 "no longer
+ * available to new users" on gemini-2.x), so a hard-coded list is wrong for
+ * someone. Filters to chat-capable gemini-* models, newest first.
+ */
+export async function listGoogleModels(apiKey: string): Promise<string[]> {
+  const ai = new GoogleGenAI({ apiKey });
+  const pager = await ai.models.list({ config: { pageSize: 100 } });
+  const out: string[] = [];
+  for await (const m of pager) {
+    const name = (m.name ?? '').replace(/^models\//, '');
+    if (!name.startsWith('gemini')) continue;
+    const actions = m.supportedActions ?? [];
+    if (actions.length > 0 && !actions.includes('generateContent')) continue;
+    // Non-chat variants that still advertise generateContent.
+    if (/-(image|tts|embedding|live|audio|transcribe|customtools|computer-use|robotics)/i.test(name)) continue;
+    // The list endpoint still returns gemini-2.x for accounts that get 404
+    // "no longer available to new users" when calling them (verified live),
+    // so the listing alone can't be trusted for gating — drop generations
+    // below 3. Versionless aliases (gemini-flash-latest) are kept.
+    const gen = name.match(/^gemini-(\d+)/);
+    if (gen && Number(gen[1]) < 3) continue;
+    out.push(name);
+  }
+  return out.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
 }
 
 // ─── Provider dispatcher ───────────────────────────────────────────────────

@@ -18,7 +18,7 @@ export interface FriendlyError {
 
 const KEY_HELP: Record<Provider, string> = {
   google:
-    'Use a Gemini API key from Google AI Studio (aistudio.google.com/app/apikey) — it starts with "AIza". ' +
+    'Use a Gemini API key from Google AI Studio (aistudio.google.com/app/apikey) — new keys start with "AQ.", older ones with "AIza". ' +
     'A Google Cloud key made for another service (Custom Search, Maps, …) will not work here.',
   anthropic: 'Get a key from console.anthropic.com → API keys. It starts with "sk-ant-".',
   openai: 'Get a key from platform.openai.com → API keys. It starts with "sk-".',
@@ -134,10 +134,17 @@ export function describeProviderError(provider: Provider, model: string, err: un
     };
   }
 
-  if (status === 404 || /not found|NOT_FOUND|model.*(not (found|supported|exist)|unavailable)|does not exist/i.test(text)) {
+  if (
+    status === 404 ||
+    /not found|NOT_FOUND|model.*(not (found|supported|exist)|unavailable)|does not exist|no longer available/i.test(text)
+  ) {
+    const googleHint =
+      provider === 'google'
+        ? 'Google retires older Gemini generations for newer accounts — with a key pasted, the Model picker lists exactly what your key can use; gemini-3.6-flash or gemini-3.1-pro-preview are safe choices.'
+        : 'Pick a different model in Settings — some models need a paid tier or a newer API version.';
     return {
       title: `The model "${model}" isn't available for your key`,
-      hint: 'Pick a different model in Settings — some models need a paid tier or a newer API version.',
+      hint: googleHint,
       details,
       action: 'settings',
     };

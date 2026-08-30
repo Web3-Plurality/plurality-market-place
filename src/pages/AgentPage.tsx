@@ -17,6 +17,7 @@ import {
 import {
   PROVIDER_LABELS,
   SUGGESTED_MODELS,
+  DEFAULT_MODELS,
   getModel,
   setModel,
   getProvider,
@@ -24,7 +25,7 @@ import {
   type Provider,
 } from '../services/byokStorage';
 import { ByokMcpClient } from '../services/byokMcpClient';
-import { runTurn, type ChatMessage, type ToolTrace } from '../services/byokChat';
+import { runTurn, listGoogleModels, type ChatMessage, type ToolTrace } from '../services/byokChat';
 import { describeMcpError, describeProviderError, type FriendlyError } from '../services/byokErrors';
 import { listBuckets, type Bucket } from '../services/bucketApi';
 import { MCP_URL } from '../utils/env';
@@ -435,7 +436,7 @@ const SUGGESTIONS = [
 // Where to get a key, per provider — shown under the key input so people
 // don't paste a key for the wrong Google product (a very common mistake).
 const KEY_HINTS: Record<Provider, string> = {
-  google: 'Gemini key from Google AI Studio (aistudio.google.com/app/apikey), starts with "AIza". Not a Custom Search / Maps key.',
+  google: 'Gemini key from Google AI Studio (aistudio.google.com/app/apikey), starts with "AQ." (older keys: "AIza"). Not a Custom Search / Maps key.',
   anthropic: 'From console.anthropic.com → API keys, starts with "sk-ant-".',
   openai: 'From platform.openai.com → API keys, starts with "sk-".',
 };
@@ -454,6 +455,13 @@ const AgentPage = () => {
   const [patInput, setPatInput] = useState<string>('');
   const [committedPat, setCommittedPat] = useState<string>('');
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  // Live model list for the pasted Google key. Google gates model
+  // generations per account (older accounts keep gemini-2.x, newer ones get
+  // "no longer available to new users"), so a static list can't be right for
+  // everyone — we ask the API what this key can actually use. Stored with
+  // the key it was fetched for, so a changed/cleared key naturally falls back
+  // to SUGGESTED_MODELS without a synchronous reset in the effect.
+  const [googleModels, setGoogleModels] = useState<{ key: string; models: string[] } | null>(null);
 
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -489,6 +497,41 @@ const AgentPage = () => {
     },
     [provider],
   );
+
+  // Fetch the Google model list once a plausible key is pasted (debounced so
+  // we don't hit the API on every keystroke). If the currently selected model
+  // isn't in the list, move to the first one the key can use.
+  useEffect(() => {
+    const key = apiKey.trim();
+    if (provider !== 'google' || key.length < 20) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      listGoogleModels(key)
+        .then((models) => {
+          if (cancelled || models.length === 0) return;
+          setGoogleModels({ key, models });
+          if (!models.includes(model)) {
+            const next = models.find((m) => m === DEFAULT_MODELS.google) ?? models[0];
+            setModelState(next);
+            setModel('google', next);
+          }
+        })
+        .catch(() => {
+          // Listing is best-effort; the static fallback list stays in place.
+        });
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // `model` is intentionally omitted: this effect reacts to key/provider
+    // changes, not to the user picking a model from the list it produced.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, apiKey]);
+
+  const liveGoogleModels =
+    provider === 'google' && googleModels && googleModels.key === apiKey.trim() ? googleModels.models : null;
+  const modelOptions = liveGoogleModels ?? SUGGESTED_MODELS[provider];
 
   const handlePatBlur = useCallback(() => {
     const trimmed = patInput.trim();
@@ -691,7 +734,8 @@ const AgentPage = () => {
                 <Select
                   value={model}
                   onChange={handleModelChange}
-                  options={SUGGESTED_MODELS[provider].map((m) => ({ value: m, label: m }))}
+                  showSearch
+                  options={modelOptions.map((m) => ({ value: m, label: m }))}
                 />
               </Field>
             </FieldRow>
@@ -708,7 +752,7 @@ const AgentPage = () => {
                     ? 'sk-ant-…'
                     : provider === 'openai'
                       ? 'sk-…'
-                      : 'AIza…'
+                      : 'AQ.… (or AIza…)'
                 }
               />
               <InlineHint>

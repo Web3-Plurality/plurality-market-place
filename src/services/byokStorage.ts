@@ -20,14 +20,20 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
 export const DEFAULT_MODELS: Record<Provider, string> = {
   anthropic: 'claude-sonnet-4-6',
   openai: 'gpt-4o',
-  google: 'gemini-2.5-flash',
+  google: 'gemini-3.6-flash',
 };
 
-// Common models surfaced in the picker. Free-text override is also allowed.
+// Fallback models surfaced in the picker when the provider's live model list
+// isn't available (no key pasted yet, or the list call failed).
+//
+// Google gates older generations per account: accounts created after the
+// mid-2026 key migration get "no longer available to new users" (404) for
+// gemini-2.x, so only 3.x models are listed here. The picker prefers the
+// live list from listGoogleModels() when a key is present.
 export const SUGGESTED_MODELS: Record<Provider, string[]> = {
   anthropic: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-  google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+  google: ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash'],
 };
 
 const PREFIX = 'plurality.byok.';
