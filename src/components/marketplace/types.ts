@@ -37,6 +37,15 @@ export interface NftSnapshot {
   coverImage: string | null;
   /** Marketplace category key (see categories.ts); null for legacy mints. */
   category?: string | null;
+  /** Optional Skill (instructions) attached to the bucket. Name/summary are
+   *  public; full instructions are only served to the creator / NFT holders. */
+  hasSkill?: boolean;
+  skillName?: string | null;
+  skillSummary?: string | null;
+  /** Team-curated: pinned to the homepage hero slider by an admin wallet. */
+  featured?: boolean;
+  /** ISO timestamp of when it was featured; orders the slider (newest first). */
+  featuredAt?: string | null;
   contexts?: SnapshotContext[]; // dropped from backend; left optional for UI compat
   contextCount?: number;        // batch-counted by backend (replaces contexts.length on cards)
   metadataURI: string | null;

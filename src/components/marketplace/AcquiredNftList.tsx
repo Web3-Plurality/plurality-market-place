@@ -2,8 +2,10 @@ import { useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { message, Input, Modal } from 'antd';
 import { MdRefresh, MdSell, MdRemoveShoppingCart } from 'react-icons/md';
-import { useWriteContract } from 'wagmi';
+import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
+import { oasisSapphireTestnet } from '../../services/wagmi';
+import { describeTxError } from '../../utils/txErrors';
 import NftPreviewCard from './NftPreviewCard';
 import NftDetailModal from './NftDetailModal';
 import { apiPost, apiGet } from '../../utils/api';
@@ -107,6 +109,11 @@ const Loading = styled.div`
 
 const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
   const { writeContractAsync } = useWriteContract();
+  const { address } = useAccount();
+  // Always talk to Sapphire for reads / receipts, whatever chain the wallet is on.
+  const sapphireClient = usePublicClient({ chainId: oasisSapphireTestnet.id });
+  // Upper bound for "copies to list" = what this wallet actually holds.
+  const [listingMax, setListingMax] = useState<number>(1);
   const [detailNft, setDetailNft] = useState<NftSnapshot | null>(null);
   const [processing, setProcessing] = useState<number | null>(null);
   const [processingLabel, setProcessingLabel] = useState('');
@@ -122,7 +129,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
   }, []);
 
   const handleList = useCallback(async (tokenId: number, price: string, amount: string) => {
-    if (!price || isNaN(parseFloat(price))) {
+    if (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
       message.error('Please enter a valid price');
       return;
     }
@@ -130,6 +137,16 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
     const amountInt = parseInt(amount, 10);
     if (!Number.isInteger(amountInt) || amountInt < 1) {
       message.error('Please enter a valid number of copies (min 1)');
+      return;
+    }
+    if (amountInt > listingMax) {
+      message.error(
+        `You hold ${listingMax} cop${listingMax === 1 ? 'y' : 'ies'} of this NFT, so you can list at most ${listingMax}.`,
+      );
+      return;
+    }
+    if (!address || !sapphireClient) {
+      message.error('Connect your wallet first');
       return;
     }
 
@@ -141,52 +158,71 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
     try {
       const addr = await getContractAddress();
       if (!addr) { message.error('Contract address not available'); return; }
-
+      const contract = addr as `0x${string}`;
       const priceWei = parseEther(price);
 
-      // Approve
-      setProcessingLabel('Approving…');
-      try {
-        await writeContractAsync({
-          address: addr as `0x${string}`,
+      // Step 1: marketplace approval, only if not granted yet (saves a signature).
+      const approved = (await sapphireClient.readContract({
+        address: contract,
+        abi: PluralityMemoryNFTABI,
+        functionName: 'isApprovedForAll',
+        args: [address, contract],
+      })) as boolean;
+      if (!approved) {
+        setProcessingLabel('Approving…');
+        const approveTx = await writeContractAsync({
+          address: contract,
           abi: PluralityMemoryNFTABI,
           functionName: 'setApprovalForAll',
-          args: [addr as `0x${string}`, true],
+          args: [contract, true],
         });
-      } catch (e: any) {
-        if (e.message?.includes('User rejected')) { message.error('Approval rejected'); return; }
+        const approveReceipt = await sapphireClient.waitForTransactionReceipt({ hash: approveTx });
+        if (approveReceipt.status !== 'success') throw new Error('The approval transaction was reverted on-chain');
       }
 
-      // List
+      // Step 2: dry-run first. A revert (e.g. listing more copies than held)
+      // surfaces here with its reason, before the wallet asks for a signature.
+      setProcessingLabel('Checking…');
+      await sapphireClient.simulateContract({
+        address: contract,
+        abi: PluralityMemoryNFTABI,
+        functionName: 'listBucket',
+        args: [BigInt(tokenId), priceWei, BigInt(amountInt)],
+        account: address,
+      });
+
+      // Step 3: the real transaction.
       setProcessingLabel('Signing…');
       const listTxHash = await writeContractAsync({
-        address: addr as `0x${string}`,
+        address: contract,
         abi: PluralityMemoryNFTABI,
         functionName: 'listBucket',
         args: [BigInt(tokenId), priceWei, BigInt(amountInt)],
       });
 
       setProcessingLabel('Confirming…');
-      const { createPublicClient, http, defineChain } = await import('viem');
-      const chain = defineChain({
-        id: 23295, name: 'Oasis Sapphire Testnet',
-        nativeCurrency: { name: 'TEST', symbol: 'TEST', decimals: 18 },
-        rpcUrls: { default: { http: ['https://testnet.sapphire.oasis.io'] } },
-      });
-      const publicClient = createPublicClient({ chain, transport: http() });
-      await publicClient.waitForTransactionReceipt({ hash: listTxHash });
+      const receipt = await sapphireClient.waitForTransactionReceipt({ hash: listTxHash });
+      if (receipt.status !== 'success') {
+        throw new Error('The listing transaction was reverted on-chain. Nothing was listed.');
+      }
 
-      await apiPost(`/blockchain/list/${tokenId}`, { txHash: listTxHash });
+      // Step 4: record in the backend only after on-chain confirmation.
+      const res = await apiPost(`/blockchain/list/${tokenId}`, { txHash: listTxHash });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body.message || body.error || `The listing is on-chain but could not be recorded (${res.status}). Refresh in a moment.`,
+        );
+      }
       message.success('NFT listed for sale!');
       onRefresh();
-    } catch (error: any) {
-      const msg = error.message?.includes('User rejected') ? 'Transaction rejected' : 'Failed to list';
-      message.error(msg);
+    } catch (error: unknown) {
+      message.error(describeTxError(error, 'Listing failed'));
     } finally {
       setProcessing(null);
       setProcessingLabel('');
     }
-  }, [writeContractAsync, onRefresh, getContractAddress]);
+  }, [address, sapphireClient, listingMax, writeContractAsync, onRefresh, getContractAddress]);
 
   const handleDelist = useCallback(async (tokenId: number) => {
     setProcessing(tokenId);
@@ -265,7 +301,10 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
                       ) : (
                         <ActionButton
                           $variant="primary"
-                          onClick={() => setListingTokenId(nft.tokenId)}
+                          onClick={() => {
+                            setListingMax(Math.max(1, nft.copiesOwned ?? 1));
+                            setListingTokenId(nft.tokenId);
+                          }}
                           disabled={isProcessing}
                         >
                           <MdSell size={11} />
@@ -299,11 +338,15 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
         <Input
           type="number"
           min={1}
+          max={listingMax}
           step={1}
           placeholder="1"
           value={listingAmount}
           onChange={(e) => setListingAmount(e.target.value)}
         />
+        <p style={{ marginTop: 6, marginBottom: 0, fontSize: 12, opacity: 0.65 }}>
+          You hold {listingMax} cop{listingMax === 1 ? 'y' : 'ies'} of this NFT, so that is the maximum.
+        </p>
       </Modal>
 
       <NftDetailModal

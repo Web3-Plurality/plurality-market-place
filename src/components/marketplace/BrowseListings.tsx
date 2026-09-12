@@ -122,7 +122,7 @@ const BrowseListings = ({ listings, loading, filtered, onSelect }: Props) => {
       <EmptyState>
         {filtered
           ? 'Nothing matches that search or category yet. Try another one.'
-          : 'No listings available yet. When someone lists a memory for sale, it will appear here.'}
+          : 'No listings available yet. When someone lists a Skill for sale, it will appear here.'}
       </EmptyState>
     );
   }
