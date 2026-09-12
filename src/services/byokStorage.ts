@@ -18,23 +18,25 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
 
 // Curated default model per provider. Users can override.
 export const DEFAULT_MODELS: Record<Provider, string> = {
-  anthropic: 'claude-sonnet-4-6',
+  anthropic: 'claude-sonnet-5',
   openai: 'gpt-4o',
+  // Google's own recommendation when it retired 2.5-flash for new accounts.
   google: 'gemini-3.6-flash',
 };
 
-// Fallback models surfaced in the picker when the provider's live model list
-// isn't available (no key pasted yet, or the list call failed).
-//
-// Google gates older generations per account: accounts created after the
-// mid-2026 key migration get "no longer available to new users" (404) for
-// gemini-2.x, so only 3.x models are listed here. The picker prefers the
-// live list from listGoogleModels() when a key is present.
+// Common models surfaced in the picker. All of these accept image input;
+// PDFs work on Anthropic, Google and OpenAI's 4o+/5 models. An unknown id
+// simply yields a friendly "model not available" notice.
 export const SUGGESTED_MODELS: Record<Provider, string[]> = {
-  anthropic: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-  google: ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash'],
+  anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'],
+  openai: ['gpt-5', 'gpt-5-mini', 'gpt-4o', 'gpt-4o-mini'],
+  google: ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-pro-latest', 'gemini-flash-latest'],
 };
+
+// Ids Google/others have retired for new accounts. A stored preference for
+// one of these silently falls back to the provider default instead of
+// failing every request with a 404.
+const RETIRED_MODELS = /^(gemini-(1\.5|2\.0|2\.5)-|claude-3|gpt-4-turbo)/;
 
 const PREFIX = 'plurality.byok.';
 const modelStorageKey = (p: Provider) => `${PREFIX}model.${p}`;
@@ -52,7 +54,9 @@ export function setProvider(provider: Provider): void {
 }
 
 export function getModel(provider: Provider): string {
-  return localStorage.getItem(modelStorageKey(provider)) || DEFAULT_MODELS[provider];
+  const stored = localStorage.getItem(modelStorageKey(provider));
+  if (!stored || RETIRED_MODELS.test(stored)) return DEFAULT_MODELS[provider];
+  return stored;
 }
 
 export function setModel(provider: Provider, model: string): void {

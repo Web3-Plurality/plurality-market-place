@@ -64,6 +64,21 @@ export async function createPat(payload: CreatePatPayload): Promise<PatCreatedRe
   return r.json();
 }
 
+/**
+ * Mint the in-app chat's auto token: 1h TTL, mcp:tools, never listed in the
+ * API tokens dialog. The backend revokes the previous auto token on each
+ * call, so hold the result in memory only and re-mint on demand.
+ */
+export async function mintAutoPat(): Promise<{ token: string; expiresAt: string }> {
+  const r = await apiPost('/pat/tokens', { auto: true });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to start chat session (${r.status})`);
+  }
+  const data = await r.json();
+  return { token: data.token, expiresAt: data.expiresAt };
+}
+
 export async function revokePat(id: string): Promise<void> {
   const r = await apiDelete(`/pat/tokens/${id}`);
   if (!r.ok && r.status !== 204) {

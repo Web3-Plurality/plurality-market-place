@@ -9,6 +9,9 @@ export interface SessionRecoveryResult {
   success: boolean;
   userId?: string;
   authAddress?: string;
+  /** Wallet is on the team's ADMIN_WALLETS allowlist (curation UI only;
+   *  the backend re-checks on every curation call). */
+  isAdmin?: boolean;
 }
 
 /**
@@ -27,6 +30,7 @@ export async function tryRecoverSession(): Promise<SessionRecoveryResult> {
       success: true,
       userId: data.userId,
       authAddress: data.authAddress,
+      isAdmin: data.isAdmin === true,
     };
   } catch {
     return { success: false };

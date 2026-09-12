@@ -21,8 +21,8 @@ import {
 type TabKey = 'drafts' | 'minted' | 'acquired';
 
 const TAB_SUBTITLES: Record<TabKey, string> = {
-  drafts: 'Editable memory buckets. Once minted, they move to My Minted NFTs and become read-only.',
-  minted: 'NFTs you minted from your own buckets. Sell on the marketplace to transfer ownership.',
+  drafts: 'Editable memories. Once minted, they move to My Minted NFTs and become read-only.',
+  minted: 'NFTs you minted from your own memories. Sell on the marketplace to transfer ownership.',
   acquired: 'NFTs you purchased from other creators.',
 };
 
@@ -94,7 +94,7 @@ const MyPlayground = () => {
 
       <Panel>
         <ThemeProvider theme={marketplaceTheme}>
-          {/* StudioPage tells us whenever a draft is minted (moves to My Minted)
+          {/* StudioPage tells us whenever a draft is minted (moves to Minted Skills)
               or a mint is cancelled (comes back as a draft). Either way the
               minted list needs to refetch so it doesn't show a stale state. */}
           {activeTab === 'drafts' && <StudioPage onBucketStateChanged={fetchMintedNfts} />}

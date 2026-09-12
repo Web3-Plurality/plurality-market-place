@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled, { ThemeProvider } from 'styled-components';
 import { Select } from 'antd';
-import { MdSearch, MdRefresh, MdExpandMore } from 'react-icons/md';
+import { MdSearch, MdExpandMore, MdAutoAwesome } from 'react-icons/md';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
-import { apiGet } from '../../utils/api';
+import { apiGet, apiPut } from '../../utils/api';
+import { useAppSelector } from '../../hooks/useAppStore';
 import { Container, marketplaceTheme } from './pageChrome';
 import { CATEGORIES } from './categories';
 import HeroSlider from './HeroSlider';
@@ -208,22 +209,29 @@ const SortSelect = styled(Select)`
   }
 `;
 
-const RefreshButton = styled.button`
+// "Skill included only" toggle: same height as the sort select so the tool
+// row reads as one line.
+const SkillToggle = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   height: 38px;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  border: 1px solid ${({ $active }) => ($active ? 'transparent' : 'rgba(255, 255, 255, 0.12)')};
+  background: ${({ $active }) =>
+    $active
+      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95) 0%, rgba(139, 92, 246, 0.95) 100%)'
+      : 'rgba(255, 255, 255, 0.04)'};
+  color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.72)')};
   font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
+  transition: all 0.15s ease;
 
   &:hover {
     color: #fff;
-    border-color: rgba(139, 92, 246, 0.5);
+    border-color: ${({ $active }) => ($active ? 'transparent' : 'rgba(139, 92, 246, 0.5)')};
   }
 `;
 
@@ -247,13 +255,18 @@ function sortListings(list: NftSnapshot[], sort: SortOption): NftSnapshot[] {
   }
 }
 
-// Hero picks: newest listings, cover-image ones first so the slider looks
-// good, capped at HERO_SIZE.
+// Hero picks: ONLY team-curated buckets (featured flag set by admin wallets,
+// most recently featured leading), capped at HERO_SIZE. Deliberately no
+// automatic fallback: when the team has featured nothing, the homepage
+// renders no slider instead of auto-picked placeholder slides.
 function pickFeatured(list: NftSnapshot[]): NftSnapshot[] {
-  const newest = sortListings(list, 'newest');
-  const withCover = newest.filter((n) => n.coverImage || n.profileImage);
-  const without = newest.filter((n) => !(n.coverImage || n.profileImage));
-  return [...withCover, ...without].slice(0, HERO_SIZE);
+  return list
+    .filter((n) => !!n.featured)
+    .sort(
+      (a, b) =>
+        new Date(b.featuredAt || b.createdAt).getTime() - new Date(a.featuredAt || a.createdAt).getTime(),
+    )
+    .slice(0, HERO_SIZE);
 }
 
 // ─── Homepage ────────────────────────────────────────────────────────────
@@ -266,7 +279,11 @@ const MarketplaceDashboard = () => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [sort, setSort] = useState<SortOption>('newest');
+  const [skillOnly, setSkillOnly] = useState(false);
   const [detailNft, setDetailNft] = useState<NftSnapshot | null>(null);
+  // Team allowlist flag from the session probe. Only reveals the curation
+  // toggle; the backend re-checks the allowlist on every call.
+  const isAdmin = useAppSelector((s) => s.auth.isAdmin);
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -287,6 +304,15 @@ const MarketplaceDashboard = () => {
     void fetchListings();
   }, [fetchListings]);
 
+  // No manual refresh button: refetch quietly whenever the tab regains focus.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void fetchListings();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fetchListings]);
+
   const countsByCategory = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const n of listings) {
@@ -301,19 +327,22 @@ const MarketplaceDashboard = () => {
     if (category !== 'all') {
       result = result.filter((n) => (n.category || 'other') === category);
     }
+    if (skillOnly) {
+      result = result.filter((n) => !!n.hasSkill);
+    }
     const q = query.trim().toLowerCase();
     if (q) {
       result = result.filter((n) =>
-        [n.title, n.profileName, n.tagline, n.description]
+        [n.title, n.profileName, n.tagline, n.description, n.skillName, n.skillSummary]
           .filter((s): s is string => !!s)
           .some((s) => s.toLowerCase().includes(q)),
       );
     }
     return sortListings(result, sort);
-  }, [listings, category, query, sort]);
+  }, [listings, category, query, sort, skillOnly]);
 
   const featured = useMemo(() => pickFeatured(listings), [listings]);
-  const isFiltered = category !== 'all' || query.trim().length > 0;
+  const isFiltered = category !== 'all' || query.trim().length > 0 || skillOnly;
 
   // Buying happens inside the detail modal; on success re-fetch so sold-out
   // copies drop out of the grid and the hero.
@@ -321,6 +350,21 @@ const MarketplaceDashboard = () => {
     setDetailNft(null);
     void fetchListings();
   }, [fetchListings]);
+
+  // Admin curation: flip the featured flag, then patch local state so the
+  // slider and the open modal update instantly (no full refetch needed).
+  const handleToggleFeatured = useCallback(async (nft: NftSnapshot, next: boolean) => {
+    const response = await apiPut(`/blockchain/marketplace/featured/${nft.profileId}`, { featured: next });
+    if (!response.ok) throw new Error('Failed to update the featured flag');
+    const data = await response.json();
+    const featuredAt: string | null = data?.featuredAt ?? null;
+    setListings((cur) =>
+      cur.map((n) => (n.profileId === nft.profileId ? { ...n, featured: next, featuredAt } : n)),
+    );
+    setDetailNft((cur) =>
+      cur && cur.profileId === nft.profileId ? { ...cur, featured: next, featuredAt } : cur,
+    );
+  }, []);
 
   const categoryOptions = useMemo(
     () => [
@@ -363,11 +407,16 @@ const MarketplaceDashboard = () => {
           </SearchPill>
         </SearchRow>
 
-        <HeroSlider
-          items={featured}
-          onSelect={setDetailNft}
-          onEmptyCta={() => navigate('/marketplace/playground')}
-        />
+        {/* Slider is curation-only. Shown when the team featured something,
+            or (empty-state welcome hero) when the marketplace has no listings
+            at all. Listings-but-nothing-featured renders no hero. */}
+        {(featured.length > 0 || (!loading && listings.length === 0)) && (
+          <HeroSlider
+            items={featured}
+            onSelect={setDetailNft}
+            onEmptyCta={() => navigate('/marketplace/playground')}
+          />
+        )}
 
         <Pills>
           <Pill $active={category === 'all'} onClick={() => setCategory('all')}>
@@ -394,6 +443,16 @@ const MarketplaceDashboard = () => {
             </span>
           </SectionTitle>
           <SectionTools>
+            <SkillToggle
+              type="button"
+              $active={skillOnly}
+              aria-pressed={skillOnly}
+              title="Show only Skills that come with custom instructions"
+              onClick={() => setSkillOnly((v) => !v)}
+            >
+              <MdAutoAwesome size={14} />
+              Skill included only
+            </SkillToggle>
             <SortSelect
               value={sort}
               onChange={(v) => setSort(v as SortOption)}
@@ -404,10 +463,6 @@ const MarketplaceDashboard = () => {
                 { value: 'most_contexts', label: 'Most contexts' },
               ]}
             />
-            <RefreshButton onClick={() => void fetchListings()}>
-              <MdRefresh size={14} />
-              Refresh
-            </RefreshButton>
           </SectionTools>
         </SectionHeader>
 
@@ -422,6 +477,8 @@ const MarketplaceDashboard = () => {
           buyingLabel=""
           previewOnly
           onPurchased={handlePurchased}
+          isAdmin={isAdmin}
+          onToggleFeatured={isAdmin ? handleToggleFeatured : undefined}
           isOwnListing={
             !!address && !!detailNft?.ownerWallet && detailNft.ownerWallet.toLowerCase() === address.toLowerCase()
           }

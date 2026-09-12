@@ -4,6 +4,7 @@ import { MdChevronLeft, MdChevronRight, MdLayers, MdToken, MdArrowForward, MdAut
 import { formatEther } from 'viem';
 import type { NftSnapshot } from './types';
 import { findCategory } from './categories';
+import { optimizeImageUrl } from '../../utils/imageUrl';
 
 interface Props {
   items: NftSnapshot[];
@@ -302,8 +303,8 @@ const HeroSlider = ({ items, onSelect, onEmptyCta }: Props) => {
           </Eyebrow>
           <Title>Discover memories minted as NFTs</Title>
           <Tagline>
-            Curated knowledge buckets from other creators. Hold a copy, and your AI can read it.
-            Nothing is listed yet — be the first to mint one.
+            Curated memories from other creators. Hold a copy, and your AI can use it.
+            Nothing is listed yet. Be the first to mint one.
           </Tagline>
           {onEmptyCta && (
             <Cta onClick={onEmptyCta}>
@@ -319,7 +320,9 @@ const HeroSlider = ({ items, onSelect, onEmptyCta }: Props) => {
     <Frame onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
       <Track $index={index}>
         {items.map((nft) => {
-          const cover = nft.coverImage || nft.profileImage || undefined;
+          const rawCover = nft.coverImage || nft.profileImage;
+          const cover = optimizeImageUrl(rawCover, 1600);
+          const poster = optimizeImageUrl(rawCover, 480);
           const cat = findCategory(nft.category);
           const floorWei = nft.floorPrice ?? nft.listingPrice;
           const contexts = nft.contextCount ?? nft.contexts?.length ?? 0;
@@ -334,18 +337,24 @@ const HeroSlider = ({ items, onSelect, onEmptyCta }: Props) => {
                       </>
                     ) : (
                       <>
-                        <MdAutoAwesome size={14} /> Featured memory
+                        <MdAutoAwesome size={14} /> Featured Skill
                       </>
                     )}
+                    {nft.hasSkill && <span>· Skill</span>}
                   </Eyebrow>
                   <Title>{nft.title || nft.profileName}</Title>
+                  {/* The skill summary is the one-liner the creator wrote for
+                      buyers, so it beats the generic tagline when present. */}
                   <Tagline>
-                    {nft.tagline || nft.description?.split('\n')[0] || 'A memory bucket minted on-chain.'}
+                    {nft.skillSummary ||
+                      nft.tagline ||
+                      nft.description?.split('\n')[0] ||
+                      'A Skill minted on-chain.'}
                   </Tagline>
                   <Stats>
                     <Stat>
                       <StatLabel>Floor price</StatLabel>
-                      <StatValue>{floorWei ? `${formatEther(BigInt(floorWei))} TEST` : '—'}</StatValue>
+                      <StatValue>{floorWei ? `${formatEther(BigInt(floorWei))} TEST` : 'n/a'}</StatValue>
                     </Stat>
                     <Stat>
                       <StatLabel>Available</StatLabel>
@@ -366,7 +375,7 @@ const HeroSlider = ({ items, onSelect, onEmptyCta }: Props) => {
                     View &amp; buy <MdArrowForward size={16} />
                   </Cta>
                 </Copy>
-                <Poster $url={cover} onClick={() => onSelect(nft)} style={{ cursor: 'pointer' }} />
+                <Poster $url={poster} onClick={() => onSelect(nft)} style={{ cursor: 'pointer' }} />
               </Content>
             </Slide>
           );

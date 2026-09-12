@@ -88,7 +88,7 @@ const Stage = styled.div`
   max-width: 1100px;
 `;
 
-// Floating decorative "memory bucket" tiles
+// Floating decorative "Skill" tiles
 const FloatTile = styled.div<{ $top?: string; $left?: string; $right?: string; $bottom?: string; $rot?: number; $delay?: number }>`
   position: absolute;
   ${({ $top }) => $top && css`top: ${$top};`}
@@ -417,13 +417,13 @@ const LoginPage = () => {
       <Top>
         <BrandRow>
           <BrandLogo src="/icon128.png" alt="Plurality" />
-          <BrandText>MEMORY MARKETPLACE</BrandText>
+          <BrandText>SKILLS MARKETPLACE</BrandText>
         </BrandRow>
       </Top>
 
       <Stage>
         <FloatTile $top="6%" $left="6%" $rot={-6} $delay={0}>
-          <TileLabel>Bucket</TileLabel>
+          <TileLabel>Memory</TileLabel>
           <TileTitle>Crypto Research</TileTitle>
           <TileChips>
             <TileChip>32 contexts</TileChip>
@@ -432,7 +432,7 @@ const LoginPage = () => {
         </FloatTile>
 
         <FloatTile $top="14%" $right="8%" $rot={5} $delay={1.2}>
-          <TileLabel>Bucket</TileLabel>
+          <TileLabel>Memory</TileLabel>
           <TileTitle>Travel Memories</TileTitle>
           <TileChips>
             <TileChip>14 contexts</TileChip>
@@ -441,7 +441,7 @@ const LoginPage = () => {
         </FloatTile>
 
         <FloatTile $bottom="10%" $left="9%" $rot={4} $delay={2.4}>
-          <TileLabel>Bucket</TileLabel>
+          <TileLabel>Memory</TileLabel>
           <TileTitle>Coding Snippets</TileTitle>
           <TileChips>
             <TileChip>67 contexts</TileChip>
@@ -450,7 +450,7 @@ const LoginPage = () => {
         </FloatTile>
 
         <FloatTile $bottom="14%" $right="6%" $rot={-4} $delay={0.6}>
-          <TileLabel>Bucket</TileLabel>
+          <TileLabel>Memory</TileLabel>
           <TileTitle>Recipes</TileTitle>
           <TileChips>
             <TileChip>21 contexts</TileChip>
@@ -462,9 +462,9 @@ const LoginPage = () => {
           <Eyebrow>
             <MdToken size={12} /> NFT-backed memory buckets
           </Eyebrow>
-          <Title>Own your memories.<br />Trade them on-chain.</Title>
+          <Title>Own your knowledge.<br />Trade it as NFTs.</Title>
           <Subtitle>
-            Mint your AI memory buckets as NFTs on Oasis Sapphire. Browse, buy, and sell unique knowledge — verified, portable, and yours.
+            Mint your AI memory buckets as NFTs on Oasis Sapphire. Browse, buy, and use them directly in Claude, Cursor or any AI agent.
           </Subtitle>
 
           <ConnectButton onClick={handleMetaMaskLogin} disabled={isMetamaskLoading}>

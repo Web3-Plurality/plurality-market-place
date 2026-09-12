@@ -9,6 +9,9 @@ export interface AuthState {
   authMethod: 'metamask' | null;
   isLoading: boolean;
   error: string | null;
+  // Wallet is on the team allowlist (backend ADMIN_WALLETS). Gates curation
+  // UI like the "feature on homepage" toggle; the backend re-checks anyway.
+  isAdmin: boolean;
 }
 
 const initialState: AuthState = {
@@ -18,6 +21,7 @@ const initialState: AuthState = {
   authMethod: null,
   isLoading: false,
   error: null,
+  isAdmin: false,
 };
 
 const authSlice = createSlice({
@@ -43,6 +47,9 @@ const authSlice = createSlice({
     setAuthMethod: (state, action: PayloadAction<'metamask' | null>) => {
       state.authMethod = action.payload;
     },
+    setIsAdmin: (state, action: PayloadAction<boolean>) => {
+      state.isAdmin = action.payload;
+    },
     setError: (state, action: PayloadAction<string>) => {
       state.error = action.payload;
       state.isLoading = false;
@@ -53,9 +60,11 @@ const authSlice = createSlice({
       state.token = null;
       state.authMethod = null;
       state.error = null;
+      state.isAdmin = false;
     },
   },
 });
 
-export const { setLoading, setUser, updateUser, setToken, setAuthMethod, setError, logout } = authSlice.actions;
+export const { setLoading, setUser, updateUser, setToken, setAuthMethod, setIsAdmin, setError, logout } =
+  authSlice.actions;
 export default authSlice.reducer;

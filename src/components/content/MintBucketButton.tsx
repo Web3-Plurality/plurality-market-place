@@ -13,10 +13,17 @@ interface MintBucketButtonProps {
   /** Hide the button when the bucket is already minted or mid-mint. */
   isImmutable?: boolean;
   defaultTitle?: string;
+  /** Skill state of the bucket, passed through to the mint dialog (note
+   *  block + default title). Informational only; minting never blocks on it. */
+  hasSkill?: boolean;
+  skillName?: string | null;
   onMinted?: (tokenId: number) => void;
   /** Fires after a frozen bucket was successfully reverted to draft via
    *  /cancel — parents use this to refresh views. */
   onCancelled?: () => void;
+  /** When set, the button is disabled and this text explains why (e.g.
+   *  contexts still processing). */
+  disabledReason?: string | null;
 }
 
 const spin = keyframes`
@@ -99,8 +106,11 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
   isOwner,
   isImmutable = false,
   defaultTitle,
+  hasSkill = false,
+  skillName = null,
   onMinted,
   onCancelled,
+  disabledReason = null,
 }) => {
   const { address, isConnected, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
@@ -249,8 +259,8 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
         // Pending UI in My Minted NFTs.
         message.error(
           isUserRejection(err)
-            ? 'Mint rejected. Contexts are already on-chain — resume from My Minted NFTs.'
-            : 'Mint transaction failed. Contexts are already on-chain — resume from My Minted NFTs.',
+            ? 'Mint rejected. Contexts are already on-chain. Resume from My Minted NFTs.'
+            : 'Mint transaction failed. Contexts are already on-chain. Resume from My Minted NFTs.',
         );
         setStep('idle');
         onCancelledRef.current?.();
@@ -293,8 +303,13 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
 
   return (
     <Container>
-      <Tooltip title="Mint this bucket as an ERC-1155 NFT. Two signatures: (1) publish context hashes on-chain, (2) mint the NFT.">
-        <MintButton onClick={openDialog} disabled={isLoading}>
+      <Tooltip
+        title={
+          disabledReason ||
+          'Mint this bucket as an ERC-1155 NFT. Two signatures: (1) publish context hashes on-chain, (2) mint the NFT.'
+        }
+      >
+        <MintButton onClick={openDialog} disabled={isLoading || !!disabledReason}>
           {isLoading ? <Spinner /> : <MdToken size={14} />}
           {STEP_LABEL[step]}
         </MintButton>
@@ -302,6 +317,8 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
       <MintNftDialog
         open={dialogOpen}
         defaultTitle={defaultTitle || ''}
+        hasSkill={hasSkill}
+        skillName={skillName}
         uploading={coverUploading}
         submitting={isLoading}
         onClose={() => setDialogOpen(false)}
