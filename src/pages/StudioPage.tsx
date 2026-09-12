@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Popconfirm, Spin, Tag, Tooltip, message } from 'antd';
 import { MdAdd, MdInventory2, MdAutoStories, MdDelete, MdToken } from 'react-icons/md';
 import { listBuckets, deleteBucket, type Bucket } from '../services/bucketApi';
+import { optimizeImageUrl } from '../utils/imageUrl';
 import CreateBucketDialog from '../components/content/CreateBucketDialog';
 import BucketDetailDialog from '../components/content/BucketDetailDialog';
 import MintBucketButton from '../components/content/MintBucketButton';
@@ -113,6 +114,18 @@ const CardMeta = styled.div`
   color: rgba(255, 255, 255, 0.5);
 `;
 
+// Skill line under the context count: accent when a custom skill is set,
+// muted nudge otherwise (a bucket without a skill still mints fine).
+const CardSkill = styled.div<{ $set: boolean }>`
+  font-size: 12px;
+  margin-top: 2px;
+  color: ${({ $set }) => ($set ? '#c7d2fe' : 'rgba(255, 255, 255, 0.35)')};
+  font-weight: ${({ $set }) => ($set ? 500 : 400)};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
 const Footer = styled.div`
   display: flex;
   align-items: center;
@@ -205,6 +218,23 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Minting freezes the bucket's contents on-chain, so every context must be
+  // fully indexed first. A failed item would ship as unreadable content.
+  const mintBlockedReason = (b: Bucket): string | null => {
+    const processing = b.processingCount ?? 0;
+    const failed = b.errorCount ?? 0;
+    if (processing > 0) {
+      return `${processing} item${processing === 1 ? ' is' : 's are'} still processing. Minting unlocks when indexing finishes.`;
+    }
+    if (failed > 0) {
+      return `${failed} item${failed === 1 ? '' : 's'} failed to process. Delete or re-add ${failed === 1 ? 'it' : 'them'} before minting.`;
+    }
+    if ((b.contextCount ?? 0) === 0) {
+      return 'Add at least one context before minting.';
+    }
+    return null;
+  };
   const [activeBucket, setActiveBucket] = useState<{
     id: string;
     name: string;
@@ -217,7 +247,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
       setBuckets(list);
     } catch (err) {
       console.error('Failed to load buckets:', err);
-      message.error(err instanceof Error ? err.message : 'Failed to load buckets');
+      message.error(err instanceof Error ? err.message : 'Failed to load Skills');
     }
   }, []);
 
@@ -232,6 +262,27 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
     };
   }, [refresh]);
 
+  // While any bucket still has contexts indexing, poll so the Mint button
+  // unlocks by itself once processing finishes (the detail dialog gets live
+  // SSE updates, but the card grid does not).
+  const anyProcessing = buckets.some((b) => (b.processingCount ?? 0) > 0);
+  useEffect(() => {
+    if (!anyProcessing) return;
+    // Skip ticks while the tab is hidden, and give up after 10 minutes so a
+    // context stuck in "processing" (lost webhook) can't keep the grid
+    // re-rendering forever. The next user action refreshes anyway.
+    const startedAt = Date.now();
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - startedAt > 10 * 60_000) {
+        window.clearInterval(id);
+        return;
+      }
+      void refresh();
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [anyProcessing, refresh]);
+
   const handleCreated = useCallback(async () => {
     await refresh();
   }, [refresh]);
@@ -244,7 +295,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
         message.success(`Deleted "${b.profileName}"`);
         await refresh();
       } catch (err) {
-        message.error(err instanceof Error ? err.message : 'Failed to delete bucket');
+        message.error(err instanceof Error ? err.message : 'Failed to delete Skill');
       } finally {
         hideLoading();
       }
@@ -257,7 +308,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
       <TopRow>
         <CreateButton onClick={() => setCreateOpen(true)}>
           <MdAdd size={18} />
-          Create Bucket
+          Create Memory
         </CreateButton>
       </TopRow>
 
@@ -270,13 +321,13 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
           <EmptyIcon>
             <MdAutoStories size={32} />
           </EmptyIcon>
-          <EmptyTitle>No buckets yet</EmptyTitle>
+          <EmptyTitle>No memories yet</EmptyTitle>
           <EmptyText>
-            Create your first memory bucket to start adding contexts and chatting with your knowledge.
+            Create your first Skill to start adding knowledge and chatting with it.
           </EmptyText>
           <CreateButton onClick={() => setCreateOpen(true)}>
             <MdAdd size={18} />
-            Create Your First Bucket
+            Create Your First Memory
           </CreateButton>
         </EmptyWrap>
       ) : (
@@ -303,7 +354,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
               }}
             >
               <CardHeader>
-                <CardThumb $img={b.image || undefined}>
+                <CardThumb $img={optimizeImageUrl(b.image, 160)}>
                   {!b.image && <MdInventory2 size={22} />}
                 </CardThumb>
                 <div style={{ minWidth: 0 }}>
@@ -330,8 +381,11 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                   <CardMeta>
                     {typeof b.contextCount === 'number'
                       ? `${b.contextCount} context${b.contextCount === 1 ? '' : 's'}`
-                      : 'Bucket'}
+                      : 'Skill'}
                   </CardMeta>
+                  <CardSkill $set={!!b.hasSkill} title={b.hasSkill ? b.skillName || undefined : undefined}>
+                    {b.hasSkill ? `Skill: ${b.skillName || 'Untitled'}` : 'No skill yet'}
+                  </CardSkill>
                 </div>
               </CardHeader>
               <Footer>
@@ -347,6 +401,9 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                         isOwner={true}
                         isImmutable={false}
                         defaultTitle={b.profileName}
+                        hasSkill={!!b.hasSkill}
+                        skillName={b.skillName}
+                        disabledReason={mintBlockedReason(b)}
                         // After /mint/confirm flips the bucket to isImmutable,
                         // a refresh removes it from Drafts (backend filters
                         // them out) and surfaces it under My Minted NFTs.
@@ -364,7 +421,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                         }}
                       />
                       <Popconfirm
-                        title="Delete this bucket?"
+                        title="Delete this Skill?"
                         description="All contexts and vector data will be permanently removed."
                         okText="Delete"
                         okButtonProps={{ danger: true }}
@@ -373,7 +430,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                           void handleDelete(b);
                         }}
                       >
-                        <Tooltip title="Delete bucket">
+                        <Tooltip title="Delete Skill">
                           <DeleteIcon>
                             <MdDelete size={15} />
                           </DeleteIcon>

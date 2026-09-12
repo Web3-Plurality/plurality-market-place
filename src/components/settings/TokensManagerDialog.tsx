@@ -26,6 +26,7 @@ import {
   type PatCreatedRecord,
   type CreatePatPayload,
 } from '../../services/patApi';
+import { MCP_URL } from '../../utils/env';
 
 interface Props {
   open: boolean;
@@ -197,17 +198,57 @@ const Hint = styled.div`
   color: rgba(255, 255, 255, 0.5);
 `;
 
-const NextSteps = styled.ol`
-  margin: 0;
-  padding: 12px 14px 12px 32px;
+// "Connect this token" block: one copyable snippet per client family.
+const ConnectBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
   border-radius: 10px;
   background: rgba(52, 211, 153, 0.06);
   border: 1px solid rgba(52, 211, 153, 0.25);
   color: rgba(255, 255, 255, 0.8);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.55;
+`;
 
-  li + li { margin-top: 4px; }
+const SnippetHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+`;
+
+const Snippet = styled.pre`
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #c7d2fe;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow: auto;
+`;
+
+const CopyBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  cursor: pointer;
+  &:hover { color: #fff; border-color: rgba(139, 92, 246, 0.5); }
 `;
 
 const RevealBanner = styled.div`
@@ -322,7 +363,7 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
       await navigator.clipboard.writeText(text);
       message.success('Copied to clipboard');
     } catch {
-      message.error('Copy failed — select and copy manually');
+      message.error('Copy failed. Select the token and copy it manually.');
     }
   }, []);
 
@@ -354,10 +395,10 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
             <IntroNote>
               <MdKey size={16} style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                A token is like a password that lets an AI app read your memory buckets — the{' '}
-                <b>Talk to Memory</b> chat on this site, or tools like Claude Code on your
-                computer. Generate one, paste it into the app, and revoke it here anytime to cut
-                that app&apos;s access.
+                A token is like a password that lets an <b>external</b> AI app (Claude Code, Cursor
+                or any other MCP client on your computer) use your Skills. Generate one, paste it
+                into that app, and revoke it here anytime to cut its access. The Use a Skill chat
+                on this site doesn&apos;t need one.
               </div>
             </IntroNote>
 
@@ -440,7 +481,7 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Talk to Memory, or Claude Code on my laptop"
+                placeholder="e.g. Claude Code on my laptop, or Cursor"
                 maxLength={100}
                 autoFocus
               />
@@ -496,18 +537,31 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
             </Field>
 
             <Field>
-              <Label>What to do with it</Label>
-              <NextSteps>
-                <li>Copy the token above.</li>
-                <li>
-                  <b>Talk to Memory</b> (on this site): open the chat → <b>Settings</b> → paste it
-                  into <b>Memory access token</b>.
-                </li>
-                <li>
-                  <b>Claude Code / Cursor / other MCP apps</b>: add this site&apos;s MCP endpoint and
-                  use the token as the <code>Bearer</code> authorization value.
-                </li>
-              </NextSteps>
+              <Label>Connect this token</Label>
+              <ConnectBlock>
+                <div>
+                  <SnippetHead>
+                    <span>1. Claude Code (CLI)</span>
+                    <CopyBtn type="button" onClick={() => handleCopy(cliSnippet(created.token))}>
+                      <MdContentCopy size={12} /> Copy
+                    </CopyBtn>
+                  </SnippetHead>
+                  <Snippet>{cliSnippet(created.token)}</Snippet>
+                </div>
+                <div>
+                  <SnippetHead>
+                    <span>2. Claude Desktop / Cursor / other clients (JSON)</span>
+                    <CopyBtn type="button" onClick={() => handleCopy(jsonSnippet(created.token))}>
+                      <MdContentCopy size={12} /> Copy
+                    </CopyBtn>
+                  </SnippetHead>
+                  <Snippet>{jsonSnippet(created.token)}</Snippet>
+                </div>
+                <div>
+                  Once connected, your Skills show up as tools, and the <code>use_skill</code> prompt
+                  (<code>/mcp__plurality__use_skill</code> in Claude Code) loads one by name.
+                </div>
+              </ConnectBlock>
             </Field>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -519,6 +573,28 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
     </Modal>
   );
 };
+
+// Client setup snippets. Both point at this deployment's MCP endpoint and
+// carry the plaintext token, so they are only ever built on the reveal view.
+function cliSnippet(token: string): string {
+  return `claude mcp add --transport http plurality ${MCP_URL} --header "Authorization: Bearer ${token}"`;
+}
+
+function jsonSnippet(token: string): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        plurality: {
+          type: 'http',
+          url: MCP_URL,
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
 
 function formatRelative(iso: string): string {
   const now = Date.now();

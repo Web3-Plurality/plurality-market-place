@@ -80,7 +80,7 @@ const CreateBucketDialog = ({ open, onClose, onCreated }: CreateBucketDialogProp
       onOk={handleSubmit}
       title={
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <MdInventory2 size={18} /> Create Memory Bucket
+          <MdInventory2 size={18} /> Create a Memory
         </span>
       }
       okText={submitting ? 'Creating…' : 'Create'}
@@ -91,8 +91,8 @@ const CreateBucketDialog = ({ open, onClose, onCreated }: CreateBucketDialogProp
     >
       <Wrap>
         <Hint>
-          A memory bucket holds related contexts — text snippets, files, chat history. Once
-          created, you can add contexts and chat with the bucket.
+          A memory holds the contexts you add (files, notes, chats). Inside it you can also
+          attach an optional skill that tells an AI how to use them.
         </Hint>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <Label>Name</Label>
