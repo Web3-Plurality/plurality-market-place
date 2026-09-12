@@ -1,13 +1,18 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import styled from 'styled-components';
 import { Modal, Input, InputNumber, message, Spin } from 'antd';
 import { MdCloudUpload, MdToken, MdImage } from 'react-icons/md';
 import type { NftMintMetadata } from '../../hooks/useMemoryNFT';
 import { CATEGORIES } from '../marketplace/categories';
+import { optimizeImageUrl } from '../../utils/imageUrl';
 
 interface MintNftDialogProps {
   open: boolean;
   defaultTitle: string;
+  /** Whether the bucket carries a custom skill. Drives the note block and
+   *  the default title; never blocks minting. */
+  hasSkill?: boolean;
+  skillName?: string | null;
   uploading: boolean;
   submitting: boolean;
   mintFeeLabel?: string;
@@ -78,6 +83,19 @@ const Counter = styled.span`
 const HintText = styled.div`
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);
+`;
+
+// Skill note: green when the bucket ships a custom skill, amber nudge when
+// buyers would only get the default knowledge assistant.
+const SkillNote = styled.div<{ $ok: boolean }>`
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: ${({ $ok }) => ($ok ? 'rgba(52, 211, 153, 0.1)' : 'rgba(245, 158, 11, 0.12)')};
+  border: 1px solid ${({ $ok }) => ($ok ? 'rgba(52, 211, 153, 0.35)' : 'rgba(245, 158, 11, 0.4)')};
+  color: ${({ $ok }) => ($ok ? '#6ee7b7' : '#fcd34d')};
 `;
 
 // ── Cover upload zone ───────────────────────────────────────────────────────
@@ -213,6 +231,8 @@ const HiddenFile = styled.input.attrs({ type: 'file', accept: 'image/*' })`
 const MintNftDialog = ({
   open,
   defaultTitle,
+  hasSkill = false,
+  skillName = null,
   uploading,
   submitting,
   mintFeeLabel,
@@ -220,7 +240,8 @@ const MintNftDialog = ({
   onSubmit,
   onUploadCover,
 }: MintNftDialogProps) => {
-  const [title, setTitle] = useState(defaultTitle);
+  // The skill name is what buyers search for, so it wins over the bucket name.
+  const [title, setTitle] = useState((hasSkill && skillName) || defaultTitle);
   const [tagline, setTagline] = useState('');
   const [description, setDescription] = useState('');
   const [copies, setCopies] = useState<number>(COPIES_MIN);
@@ -228,6 +249,13 @@ const MintNftDialog = ({
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverLocalLoading, setCoverLocalLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The component stays mounted across open/close, so the initializer above
+  // only runs once. Re-apply the default title whenever the dialog opens so a
+  // skill added after page load is picked up.
+  useEffect(() => {
+    if (open) setTitle((hasSkill && skillName) || defaultTitle);
+  }, [open, hasSkill, skillName, defaultTitle]);
 
   const trimmedTitle = title.trim();
   const trimmedTagline = tagline.trim();
@@ -324,8 +352,21 @@ const MintNftDialog = ({
       >
         <strong>Heads up:</strong> Minting freezes this bucket permanently. You won't be able
         to add or remove contexts. If you ever sell the NFT, the buyer becomes the sole reader
-        — you will lose access to its contents.
+        and you will lose access to its contents.
       </div>
+      <SkillNote $ok={hasSkill}>
+        {hasSkill ? (
+          <>
+            <strong>Skill included:</strong> {skillName || 'Untitled'}. Buyers get these instructions
+            plus the memory.
+          </>
+        ) : (
+          <>
+            <strong>No skill yet.</strong> Buyers will get the default knowledge assistant. Close this
+            dialog and add a skill in the bucket to sell a real Skill.
+          </>
+        )}
+      </SkillNote>
       <Layout>
         <FormCol>
           <Field>
@@ -336,7 +377,7 @@ const MintNftDialog = ({
               $hasImage={!!coverUrl}
               onClick={() => fileInputRef.current?.click()}
             >
-              {coverUrl && <CoverImage src={coverUrl} alt="cover" />}
+              {coverUrl && <CoverImage src={optimizeImageUrl(coverUrl, 640)} alt="cover" />}
               {(coverLocalLoading || uploading) && (
                 <div
                   style={{
@@ -376,7 +417,7 @@ const MintNftDialog = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={TITLE_MAX}
-              placeholder="e.g. Crypto Research — Vol. I"
+              placeholder="e.g. Crypto Research, Vol. I"
             />
             <Counter>{trimmedTitle.length}/{TITLE_MAX}</Counter>
           </Field>
@@ -389,7 +430,7 @@ const MintNftDialog = ({
               value={tagline}
               onChange={(e) => setTagline(e.target.value)}
               maxLength={TAGLINE_MAX}
-              placeholder="One line that sells this memory"
+              placeholder="One line that sells this Skill"
             />
             <Counter>{trimmedTagline.length}/{TAGLINE_MAX}</Counter>
           </Field>
@@ -402,7 +443,7 @@ const MintNftDialog = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={DESCRIPTION_MAX}
-              placeholder="Tell the story behind this bucket — why it exists, what's inside, who it's for."
+              placeholder="Tell the story behind this bucket: why it exists, what's inside, who it's for."
               rows={4}
               style={{ resize: 'none' }}
             />
@@ -448,7 +489,7 @@ const MintNftDialog = ({
         <PreviewCol>
           <PreviewLabel>Live preview</PreviewLabel>
           <PreviewCard>
-            <PreviewCover $url={coverUrl || undefined}>
+            <PreviewCover $url={optimizeImageUrl(coverUrl, 640)}>
               {!coverUrl && (
                 <div
                   style={{
@@ -468,7 +509,7 @@ const MintNftDialog = ({
               <PreviewTagline>{trimmedTagline || 'Your tagline appears here.'}</PreviewTagline>
               <PreviewFooter>
                 <MdToken size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                Memory NFT
+                Skill NFT
               </PreviewFooter>
             </PreviewBody>
           </PreviewCard>

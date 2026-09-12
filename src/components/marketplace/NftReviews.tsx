@@ -351,7 +351,7 @@ const NftReviews = ({ tokenId }: Props) => {
                 </span>
               </>
             ) : (
-              <Muted>No reviews yet — be the first.</Muted>
+              <Muted>No reviews yet. Be the first.</Muted>
             )}
           </SummaryRow>
 
@@ -400,7 +400,7 @@ const NftReviews = ({ tokenId }: Props) => {
                 onChange={(e) => setComment(e.target.value)}
                 maxLength={MAX_COMMENT}
                 rows={3}
-                placeholder="Share your experience with this memory bucket…"
+                placeholder="Share your experience with this Skill…"
                 style={{ resize: 'none' }}
               />
               <SubmitButton onClick={handleSubmit} disabled={submitting || !comment.trim()}>

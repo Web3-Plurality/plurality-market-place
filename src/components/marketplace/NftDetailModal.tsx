@@ -6,12 +6,13 @@ const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 `;
-import { MdOpenInNew, MdVerified, MdShield, MdShoppingCart, MdHistory, MdToken, MdSell, MdShoppingBag, MdDownload, MdSync, MdVisibility } from 'react-icons/md';
+import { MdOpenInNew, MdVerified, MdShield, MdShoppingCart, MdHistory, MdToken, MdSell, MdShoppingBag, MdDownload, MdSync, MdVisibility, MdAutoAwesome } from 'react-icons/md';
 import { useAccount, useWriteContract, useSwitchChain, usePublicClient } from 'wagmi';
 import { formatEther } from 'viem';
 import OwnerIdenticon from './OwnerIdenticon';
 import NftReviews from './NftReviews';
 import ContextContentModal from '../content/ContextContentModal';
+import SkillViewModal from './SkillViewModal';
 import { apiGet, apiPost } from '../../utils/api';
 import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
 import { oasisSapphireTestnet } from '../../services/wagmi';
@@ -33,6 +34,11 @@ interface Props {
   // parent list refreshes (e.g. re-fetch listings + close). Absent for the
   // owner-viewed My-Minted / Acquired paths, which never trigger a buy.
   onPurchased?: () => void;
+  // Team curation: when the signed-in wallet is on the ADMIN_WALLETS
+  // allowlist, show a toggle that pins this bucket to the homepage slider.
+  // The backend re-checks the allowlist, so this is display-only gating.
+  isAdmin?: boolean;
+  onToggleFeatured?: (nft: NftSnapshot, next: boolean) => Promise<void>;
 }
 
 const Header = styled.div`
@@ -59,6 +65,29 @@ const TokenBadge = styled.span`
   background: ${({ theme }) => theme.colors.primary}15;
   color: ${({ theme }) => theme.colors.primary};
   font-weight: 600;
+`;
+
+// Admin-only pill in the header: pins/unpins the bucket on the homepage
+// slider. Amber when active so curators can tell featured state at a glance.
+const FeaturedToggle = styled.button<{ $active: boolean }>`
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid ${({ $active }) => ($active ? 'rgba(251, 191, 36, 0.55)' : 'rgba(255, 255, 255, 0.2)')};
+  background: ${({ $active }) => ($active ? 'rgba(251, 191, 36, 0.14)' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#fbbf24' : 'rgba(255, 255, 255, 0.65)')};
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    border-color: rgba(251, 191, 36, 0.55);
+    color: #fbbf24;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 `;
 
 const Section = styled.div`
@@ -378,6 +407,59 @@ const Hint = styled.div`
   margin-top: 10px;
 `;
 
+/* ── Skill (instructions attached to the bucket) ─────────── */
+
+const SkillBox = styled.div`
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+`;
+
+const SkillName = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const SkillSummary = styled.div`
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const SkillFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+`;
+
+const ViewSkillButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  background: rgba(139, 92, 246, 0.14);
+  color: ${({ theme }) => theme.colors.textPrimary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(139, 92, 246, 0.26);
+    border-color: rgba(139, 92, 246, 0.7);
+  }
+`;
+
 /* ── Transaction History ──────────────────────────────── */
 
 const Timeline = styled.div`
@@ -496,7 +578,7 @@ async function fetchBucketContexts(profileId: string): Promise<{
     const res = await apiGet(`/ai/context?profileId=${encodeURIComponent(profileId)}`);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      return { contexts: [], fetchError: `HTTP ${res.status}${body ? ` — ${body.slice(0, 120)}` : ''}` };
+      return { contexts: [], fetchError: `HTTP ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}` };
     }
     const data = await res.json();
     const list = (data.contexts || []) as Array<{
@@ -530,7 +612,10 @@ const NftDetailModal = ({
   isOwnListing,
   previewOnly = false,
   onPurchased,
+  isAdmin = false,
+  onToggleFeatured,
 }: Props) => {
+  const [featuredPending, setFeaturedPending] = useState(false);
   // Registration is now part of the mint flow (one batch tx, signed by the
   // creator before tx2 = mintBucket). Once a bucket is minted, every context
   // is on-chain by definition. The modal only shows ✓ verification state;
@@ -809,6 +894,10 @@ const NftDetailModal = ({
   // path never lists contexts, so this can't open there.
   const [viewCtx, setViewCtx] = useState<{ id: string; title: string } | null>(null);
 
+  // Holder-side skill viewer. The full instructions are only served to the
+  // creator and NFT holders, so the browse (previewOnly) path never opens it.
+  const [skillOpen, setSkillOpen] = useState(false);
+
   if (!nft) return null;
 
   const priceDisplay = nft.listingPrice ? formatEther(BigInt(nft.listingPrice)) : '?';
@@ -846,6 +935,27 @@ const NftDetailModal = ({
       <Header>
         <BucketName>{nft.profileName}</BucketName>
         {nft.tokenId && <TokenBadge>#{nft.tokenId}</TokenBadge>}
+        {isAdmin && onToggleFeatured && (
+          <FeaturedToggle
+            type="button"
+            $active={!!nft.featured}
+            disabled={featuredPending}
+            title={nft.featured ? 'Remove from the homepage slider' : 'Show in the homepage slider'}
+            onClick={async () => {
+              setFeaturedPending(true);
+              try {
+                await onToggleFeatured(nft, !nft.featured);
+                message.success(nft.featured ? 'Removed from the homepage slider' : 'Now featured on the homepage slider');
+              } catch {
+                message.error('Could not update the featured state. Please try again.');
+              } finally {
+                setFeaturedPending(false);
+              }
+            }}
+          >
+            {nft.featured ? '★ Featured' : '☆ Feature'}
+          </FeaturedToggle>
+        )}
       </Header>
 
       {/* Buy surface first — Amazon-style ordering: purchase on top, the
@@ -966,6 +1076,46 @@ const NftDetailModal = ({
           </>
         )
       )}
+
+      {/* Skill: what an AI does with this bucket. Name + summary are public;
+          the instructions themselves are only readable by holders. */}
+      <Section>
+        <SectionLabel>Skill</SectionLabel>
+        {nft.hasSkill && nft.skillName ? (
+          <SkillBox>
+            <SkillName>
+              <MdAutoAwesome size={16} style={{ color: '#c4b5fd', flexShrink: 0 }} />
+              {nft.skillName}
+            </SkillName>
+            {nft.skillSummary && <SkillSummary>{nft.skillSummary}</SkillSummary>}
+            <SkillFooter>
+              {previewOnly ? (
+                <Hint style={{ marginTop: 0 }}>Full instructions unlock after purchase.</Hint>
+              ) : (
+                <ViewSkillButton type="button" onClick={() => setSkillOpen(true)}>
+                  <MdVisibility size={14} />
+                  View skill
+                </ViewSkillButton>
+              )}
+            </SkillFooter>
+          </SkillBox>
+        ) : (
+          <>
+            <InfoRow>
+              <InfoValue>
+                Knowledge only. Comes with the default knowledge assistant, so you can still chat
+                with the memory.
+              </InfoValue>
+            </InfoRow>
+            {!previewOnly && (
+              <ViewSkillButton type="button" onClick={() => setSkillOpen(true)}>
+                <MdVisibility size={14} />
+                View skill
+              </ViewSkillButton>
+            )}
+          </>
+        )}
+      </Section>
 
       <Section>
         <SectionLabel>Details</SectionLabel>
@@ -1146,6 +1296,13 @@ const NftDetailModal = ({
         contextId={viewCtx?.id ?? null}
         title={viewCtx?.title}
         onClose={() => setViewCtx(null)}
+      />
+
+      <SkillViewModal
+        open={skillOpen}
+        profileId={skillOpen ? nft.profileId : null}
+        title={nft.skillName}
+        onClose={() => setSkillOpen(false)}
       />
     </Modal>
   );

@@ -16,6 +16,15 @@ export interface Bucket {
   image: string;
   createdAt: string;
   contextCount?: number;
+  /** Contexts still being indexed (pending / inprogress). Minting is blocked while > 0. */
+  processingCount?: number;
+  /** Contexts whose indexing failed. Minting is blocked while > 0 (delete or re-add them). */
+  errorCount?: number;
+  /** Skill = optional instructions telling an AI how to use this bucket's memory.
+   *  Name/summary are public; instructions are fetched via getSkill (creator or NFT holder). */
+  hasSkill?: boolean;
+  skillName?: string | null;
+  skillSummary?: string | null;
   isOwner?: boolean;
 
   /** Hash-as-identity / NFT-as-access-token state. A bucket is either:
@@ -41,7 +50,7 @@ interface ListProfilesResponse {
  * Default (Studio): drafts only. Once a bucket is minted, it leaves Studio
  * and lives in My Minted NFTs.
  *
- * `includeMinted: true` (Talk to Memory / agent): drafts + every minted
+ * `includeMinted: true` (Use a Skill / agent): drafts + every minted
  * bucket where the wallet still holds the NFT. Lets the agent search across
  * memory you own as drafts or as NFTs, without exposing buckets you sold.
  */
@@ -63,6 +72,78 @@ export async function createBucket(profileName: string, image?: string): Promise
     throw new Error(err.error || `Failed to create bucket (${response.status})`);
   }
   return response.json();
+}
+
+// ── Skill (one per bucket, optional) ──────────────────────────────────────
+
+export interface SkillMemoryItem {
+  contextId: string;
+  title: string;
+  description: string | null;
+  sourceType: string;
+}
+
+/** Shape of GET/PUT /ai/profile/:profileId/skill. When the bucket has no
+ *  custom skill the backend returns its built-in default (`isDefault: true`)
+ *  so every consumer behaves the same way. */
+export interface SkillRecord {
+  profileId: string;
+  hasSkill: boolean;
+  isDefault: boolean;
+  name: string;
+  summary: string;
+  instructions: string;
+  skillHash: string | null;
+  skillContextId: string | null;
+  registeredOnChain: boolean;
+  updatedAt: string | null;
+  isImmutable: boolean;
+  memoryIndex: SkillMemoryItem[];
+}
+
+export interface SkillInput {
+  name: string;
+  summary?: string;
+  instructions: string;
+}
+
+/** GET /ai/profile/:profileId/skill (creator or NFT holder). */
+export async function getSkill(profileId: string): Promise<SkillRecord> {
+  const response = await apiGet(`/ai/profile/${encodeURIComponent(profileId)}/skill`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to load skill (${response.status})`);
+  }
+  return response.json();
+}
+
+/** PUT /ai/profile/:profileId/skill (creator, draft buckets only). */
+export async function saveSkill(profileId: string, input: SkillInput): Promise<SkillRecord> {
+  const response = await apiFetchJson('PUT', `/ai/profile/${encodeURIComponent(profileId)}/skill`, input);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to save skill (${response.status})`);
+  }
+  return response.json();
+}
+
+/** DELETE /ai/profile/:profileId/skill (creator, draft buckets only). */
+export async function deleteSkill(profileId: string): Promise<void> {
+  const response = await apiDelete(`/ai/profile/${encodeURIComponent(profileId)}/skill`);
+  if (!response.ok && response.status !== 204) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to remove skill (${response.status})`);
+  }
+}
+
+// apiPost forces POST; the skill endpoint is a PUT (idempotent upsert).
+async function apiFetchJson(method: 'PUT', path: string, body: unknown): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
 }
 
 /** DELETE /ai/profile/:profileId — owner only. Cascades: deletes all contexts

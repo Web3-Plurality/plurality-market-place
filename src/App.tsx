@@ -7,7 +7,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider, theme as antdTheme } from 'antd';
 import { store, persistor } from './store';
 import type { RootState, AppDispatch } from './store';
-import { setUser, setAuthMethod, logout } from './store/slices/authSlice';
+import { setUser, setAuthMethod, setIsAdmin, logout } from './store/slices/authSlice';
 import { wagmiConfig, queryClient } from './services/wagmi';
 import { ThemeProvider } from './contexts/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
@@ -63,6 +63,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       if (session.success && session.userId) {
         dispatch(setUser({ id: session.userId }));
         dispatch(setAuthMethod('metamask'));
+        dispatch(setIsAdmin(session.isAdmin === true));
       } else if (isAuthenticated) {
         dispatch(logout());
       }

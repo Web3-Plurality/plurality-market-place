@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import styled from 'styled-components';
-import { MdToken, MdImage, MdLayers } from 'react-icons/md';
+import { MdToken, MdImage, MdLayers, MdAutoAwesome } from 'react-icons/md';
 import type { NftSnapshot } from './types';
 import { findCategory } from './categories';
+import { optimizeImageUrl } from '../../utils/imageUrl';
 
 interface Props {
   nft: NftSnapshot;
@@ -135,6 +136,25 @@ const Tagline = styled.div`
   min-height: 32px;
 `;
 
+// "Skill: <name>" (accent) or muted "Knowledge only" under the tagline.
+const SkillLine = styled.div<{ $custom: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: ${({ $custom }) => ($custom ? 600 : 400)};
+  color: ${({ $custom }) => ($custom ? '#c4b5fd' : 'rgba(255, 255, 255, 0.45)')};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+`;
+
 const Meta = styled.div`
   margin-top: 10px;
   font-size: 12px;
@@ -163,9 +183,9 @@ const Actions = styled.div`
 `;
 
 const NftPreviewCard = ({ nft, actions, meta, onClick }: Props) => {
-  const cover = nft.coverImage || nft.profileImage || undefined;
+  const cover = optimizeImageUrl(nft.coverImage || nft.profileImage, 640);
   const title = nft.title || nft.profileName;
-  const tagline = nft.tagline || nft.description?.split('\n')[0] || 'A memory bucket minted on-chain.';
+  const tagline = nft.tagline || nft.description?.split('\n')[0] || 'A Skill minted on-chain.';
   const tokenLabel = nft.tokenId !== null && nft.tokenId !== undefined ? `#${nft.tokenId}` : null;
   const ownsCopies = typeof nft.copiesOwned === 'number' && nft.copiesOwned > 0;
   const category = findCategory(nft.category);
@@ -193,6 +213,16 @@ const NftPreviewCard = ({ nft, actions, meta, onClick }: Props) => {
       <Body>
         <Title>{title}</Title>
         <Tagline>{tagline}</Tagline>
+        {nft.hasSkill && nft.skillName ? (
+          <SkillLine $custom title={nft.skillSummary || nft.skillName}>
+            <MdAutoAwesome size={12} style={{ flexShrink: 0 }} />
+            <span>Skill: {nft.skillName}</span>
+          </SkillLine>
+        ) : (
+          <SkillLine $custom={false} title="No custom skill. Comes with the default knowledge assistant.">
+            <span>Knowledge only</span>
+          </SkillLine>
+        )}
         {meta && <Meta>{meta}</Meta>}
         <Footer>
           <FooterLeft>

@@ -86,7 +86,7 @@ const HeaderRight = styled.div`
   gap: 10px;
 `;
 
-// ─── Sub-product tabs (Studio / Marketplace / Talk to Memory) ─────────────
+// ─── Sub-product tabs (Marketplace / My Playground / Talk to Memory) ──────
 const NavTabs = styled.nav`
   display: flex;
   align-items: center;
@@ -328,7 +328,7 @@ const MarketplaceLayoutInner = () => {
             <MdAccountBalanceWallet size={32} />
           </GateIconWrap>
           <GateTitle>Connect Your Wallet</GateTitle>
-          <GateDesc>Connect MetaMask to access the Memory Marketplace and trade your buckets on-chain.</GateDesc>
+          <GateDesc>Connect MetaMask to access the Memory Marketplace and trade your memories on-chain.</GateDesc>
           <PrimaryButton onClick={handleConnect} disabled={isPending}>
             <MdAccountBalanceWallet size={18} />
             {isPending ? 'Connecting…' : 'Connect MetaMask'}
