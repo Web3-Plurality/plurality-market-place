@@ -416,7 +416,7 @@ const LoginPage = () => {
       <Top>
         <BrandRow>
           <BrandLogo src="/icon128.png" alt="Plurality" />
-          <BrandText>MEMORY MARKETPLACE</BrandText>
+          <BrandText>SKILLS MARKETPLACE</BrandText>
         </BrandRow>
       </Top>
 
