@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 
 // Scoped palette for the marketplace pages — tuned so cards drawn by the
-// existing tab components (NftCard, BucketCard, etc.) render against the dark
+// existing tab components (NftPreviewCard etc.) render against the dark
 // glass panel without each file needing to be rewritten.
 const marketplacePalette = {
   primary: '#8b5cf6',

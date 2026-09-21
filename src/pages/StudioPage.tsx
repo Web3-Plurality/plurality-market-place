@@ -247,7 +247,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
       setBuckets(list);
     } catch (err) {
       console.error('Failed to load buckets:', err);
-      message.error(err instanceof Error ? err.message : 'Failed to load Skills');
+      message.error(err instanceof Error ? err.message : 'Failed to load memories');
     }
   }, []);
 
@@ -295,7 +295,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
         message.success(`Deleted "${b.profileName}"`);
         await refresh();
       } catch (err) {
-        message.error(err instanceof Error ? err.message : 'Failed to delete Skill');
+        message.error(err instanceof Error ? err.message : 'Failed to delete memory');
       } finally {
         hideLoading();
       }
@@ -308,7 +308,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
       <TopRow>
         <CreateButton onClick={() => setCreateOpen(true)}>
           <MdAdd size={18} />
-          Create Memory
+          Create a Memory
         </CreateButton>
       </TopRow>
 
@@ -323,7 +323,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
           </EmptyIcon>
           <EmptyTitle>No memories yet</EmptyTitle>
           <EmptyText>
-            Create your first Skill to start adding knowledge and chatting with it.
+            Create your first memory to start adding knowledge and chatting with it.
           </EmptyText>
           <CreateButton onClick={() => setCreateOpen(true)}>
             <MdAdd size={18} />
@@ -381,7 +381,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                   <CardMeta>
                     {typeof b.contextCount === 'number'
                       ? `${b.contextCount} context${b.contextCount === 1 ? '' : 's'}`
-                      : 'Skill'}
+                      : 'Memory'}
                   </CardMeta>
                   <CardSkill $set={!!b.hasSkill} title={b.hasSkill ? b.skillName || undefined : undefined}>
                     {b.hasSkill ? `Skill: ${b.skillName || 'Untitled'}` : 'No skill yet'}
@@ -421,7 +421,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                         }}
                       />
                       <Popconfirm
-                        title="Delete this Skill?"
+                        title="Delete this memory?"
                         description="All contexts and vector data will be permanently removed."
                         okText="Delete"
                         okButtonProps={{ danger: true }}
@@ -430,7 +430,7 @@ const StudioPage = ({ onBucketStateChanged }: StudioPageProps = {}) => {
                           void handleDelete(b);
                         }}
                       >
-                        <Tooltip title="Delete Skill">
+                        <Tooltip title="Delete memory">
                           <DeleteIcon>
                             <MdDelete size={15} />
                           </DeleteIcon>

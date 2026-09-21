@@ -185,7 +185,7 @@ const Actions = styled.div`
 const NftPreviewCard = ({ nft, actions, meta, onClick }: Props) => {
   const cover = optimizeImageUrl(nft.coverImage || nft.profileImage, 640);
   const title = nft.title || nft.profileName;
-  const tagline = nft.tagline || nft.description?.split('\n')[0] || 'A Skill minted on-chain.';
+  const tagline = nft.tagline || nft.description?.split('\n')[0] || 'A memory minted on-chain.';
   const tokenLabel = nft.tokenId !== null && nft.tokenId !== undefined ? `#${nft.tokenId}` : null;
   const ownsCopies = typeof nft.copiesOwned === 'number' && nft.copiesOwned > 0;
   const category = findCategory(nft.category);

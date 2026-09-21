@@ -400,7 +400,7 @@ const NftReviews = ({ tokenId }: Props) => {
                 onChange={(e) => setComment(e.target.value)}
                 maxLength={MAX_COMMENT}
                 rows={3}
-                placeholder="Share your experience with this Skill…"
+                placeholder="Share your experience with this memory…"
                 style={{ resize: 'none' }}
               />
               <SubmitButton onClick={handleSubmit} disabled={submitting || !comment.trim()}>

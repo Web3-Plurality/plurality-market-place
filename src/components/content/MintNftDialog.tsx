@@ -430,7 +430,7 @@ const MintNftDialog = ({
               value={tagline}
               onChange={(e) => setTagline(e.target.value)}
               maxLength={TAGLINE_MAX}
-              placeholder="One line that sells this Skill"
+              placeholder="One line that sells this memory"
             />
             <Counter>{trimmedTagline.length}/{TAGLINE_MAX}</Counter>
           </Field>
@@ -509,7 +509,7 @@ const MintNftDialog = ({
               <PreviewTagline>{trimmedTagline || 'Your tagline appears here.'}</PreviewTagline>
               <PreviewFooter>
                 <MdToken size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                Skill NFT
+                Memory NFT
               </PreviewFooter>
             </PreviewBody>
           </PreviewCard>
