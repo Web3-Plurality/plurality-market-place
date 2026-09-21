@@ -840,7 +840,7 @@ const NftDetailModal = ({
         return;
       }
 
-      setBuyLabel('Confirm in MetaMask...');
+      setBuyLabel('Confirm in MetaMask…');
       const totalValue = BigInt(sellerListing.price) * BigInt(quantity);
       const txHash = await writeContractAsync({
         address: contractAddr as `0x${string}`,
@@ -850,12 +850,12 @@ const NftDetailModal = ({
         value: totalValue,
       });
 
-      setBuyLabel('Confirming on-chain...');
+      setBuyLabel('Confirming on-chain…');
       if (publicClient) {
         await publicClient.waitForTransactionReceipt({ hash: txHash });
       }
 
-      setBuyLabel('Updating records...');
+      setBuyLabel('Updating records…');
       await apiPost(`/blockchain/buy/${nft.tokenId}`, { txHash });
 
       message.success('NFT purchased successfully!');
@@ -1043,7 +1043,7 @@ const NftDetailModal = ({
                     <BuyButton onClick={handleBuyBucket} disabled={buying}>
                       <MdShoppingCart size={18} />
                       {buying
-                        ? buyLabel || 'Processing...'
+                        ? buyLabel || 'Processing…'
                         : `Buy ${quantity} cop${quantity === 1 ? 'y' : 'ies'}`}
                     </BuyButton>
                   )}

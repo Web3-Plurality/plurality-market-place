@@ -539,7 +539,7 @@ function isUnauthorized(err: unknown): boolean {
 
 const SUGGESTIONS = [
   'What do you know about me?',
-  'Summarize what is in this Skill',
+  'Summarize what is in this memory',
   'What did I save most recently?',
 ];
 
@@ -1104,7 +1104,7 @@ const AgentPage = () => {
                 <>
                   <div>
                     One step to start chatting: choose your AI provider and paste its API key.
-                    Your Skills are connected automatically.
+                    Your memories are connected automatically.
                   </div>
                   <SetupButton onClick={() => setSettingsOpen(true)}>
                     <MdSettings size={16} />
@@ -1173,7 +1173,7 @@ const AgentPage = () => {
                   ? 'Add your AI key (Settings, top right) to start chatting'
                   : customSkillName
                     ? `Ask ${customSkillName}… (Shift+Enter for a new line)`
-                    : 'Ask about your Skills… (Shift+Enter for a new line)'
+                    : 'Ask about your memories… (Shift+Enter for a new line)'
               }
               autoSize={{ minRows: 1, maxRows: 6 }}
               disabled={!ready || busy}
@@ -1255,7 +1255,7 @@ const AgentPage = () => {
             </InlineHint>
           </Field>
           <InlineHint>
-            Access to your Skills is granted automatically to your signed-in wallet.
+            Access to your memories is granted automatically to your signed-in wallet.
             Nothing else to configure.
           </InlineHint>
         </SettingsBody>

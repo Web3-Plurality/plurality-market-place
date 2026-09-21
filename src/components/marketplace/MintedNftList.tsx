@@ -125,7 +125,7 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
           message.error(err.message || err.error || 'Failed to cancel mint');
           return;
         }
-        message.success('Mint cancelled. The Skill is back in Drafts.');
+        message.success('Mint cancelled. The memory is back in My Drafts.');
         await onRefresh();
       } catch (err) {
         message.error(err instanceof Error ? err.message : 'Failed to cancel mint');
@@ -240,16 +240,23 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
         if (approveReceipt.status !== 'success') throw new Error('The approval transaction was reverted on-chain');
       }
 
-      // Step 2: dry-run first. A revert (e.g. listing more copies than held)
-      // surfaces here with its reason, before the wallet asks for a signature.
+      // Step 2: pre-check before asking for a signature. NOT simulateContract:
+      // Sapphire zeroes msg.sender on unsigned eth_calls, so a simulated
+      // listBucket reads balanceOf(0x0) = 0 and always reverts with
+      // "insufficient copies" no matter how many the wallet really holds.
+      // An explicit balanceOf(address, id) read is unaffected.
       setProcessingLabel('Checking…');
-      await sapphireClient.simulateContract({
+      const held = (await sapphireClient.readContract({
         address: contract,
         abi: PluralityMemoryNFTABI,
-        functionName: 'listBucket',
-        args: [BigInt(tokenId), priceWei, BigInt(amountInt)],
-        account: address,
-      });
+        functionName: 'balanceOf',
+        args: [address, BigInt(tokenId)],
+      })) as bigint;
+      if (held < BigInt(amountInt)) {
+        throw new Error(
+          `Your wallet holds ${held.toString()} of this NFT on-chain; cannot list ${amountInt}.`,
+        );
+      }
 
       // Step 3: the real transaction.
       setProcessingLabel('Signing…');
@@ -325,7 +332,7 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
     }
   }, [writeContractAsync, onRefresh, getContractAddress]);
 
-  if (loading) return <Loading>Loading minted NFTs...</Loading>;
+  if (loading) return <Loading>Loading minted NFTs…</Loading>;
 
   return (
     <Container>
@@ -339,7 +346,7 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
 
       {nfts.length === 0 ? (
         <EmptyState>
-          No minted Skills yet. Go to the "Drafts" tab to mint your first Skill as an NFT.
+          No minted NFTs yet. Go to the "Drafts" tab to mint your first memory as an NFT.
         </EmptyState>
       ) : (
         <Grid>

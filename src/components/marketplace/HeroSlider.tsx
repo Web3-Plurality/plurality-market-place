@@ -337,7 +337,7 @@ const HeroSlider = ({ items, onSelect, onEmptyCta }: Props) => {
                       </>
                     ) : (
                       <>
-                        <MdAutoAwesome size={14} /> Featured Skill
+                        <MdAutoAwesome size={14} /> Featured Memory
                       </>
                     )}
                     {nft.hasSkill && <span>· Skill</span>}
@@ -349,7 +349,7 @@ const HeroSlider = ({ items, onSelect, onEmptyCta }: Props) => {
                     {nft.skillSummary ||
                       nft.tagline ||
                       nft.description?.split('\n')[0] ||
-                      'A Skill minted on-chain.'}
+                      'A memory minted on-chain.'}
                   </Tagline>
                   <Stats>
                     <Stat>

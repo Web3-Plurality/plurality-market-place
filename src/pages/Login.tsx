@@ -6,7 +6,7 @@ import { message } from 'antd';
 import { SiEthereum } from 'react-icons/si';
 import { MdToken, MdShield, MdLock } from 'react-icons/md';
 import { useAppDispatch, useAppSelector } from '../hooks/useAppStore';
-import { setUser, setToken, setAuthMethod } from '../store/slices/authSlice';
+import { setUser, setAuthMethod } from '../store/slices/authSlice';
 import { useMetamaskLogin } from '../hooks/useMetamaskLogin';
 
 // ─── Animations ──────────────────────────────────────────────────────────────
@@ -377,9 +377,8 @@ const LoginPage = () => {
         if (authResult.success) {
           dispatch(setUser({ id: walletAddress, walletAddress }));
           dispatch(setAuthMethod('metamask'));
-          if (authResult.token) {
-            dispatch(setToken(authResult.token));
-          }
+          // No token in the response body anymore: the HttpOnly cookie IS
+          // the auth, and page JS has no business holding a copy.
 
           navigate('/marketplace');
         } else {
@@ -417,7 +416,7 @@ const LoginPage = () => {
       <Top>
         <BrandRow>
           <BrandLogo src="/icon128.png" alt="Plurality" />
-          <BrandText>SKILLS MARKETPLACE</BrandText>
+          <BrandText>MEMORY MARKETPLACE</BrandText>
         </BrandRow>
       </Top>
 

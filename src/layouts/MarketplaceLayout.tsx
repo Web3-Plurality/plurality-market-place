@@ -382,7 +382,7 @@ const MarketplaceLayoutInner = () => {
                 {
                   key: 'tokens',
                   icon: <MdKey size={14} />,
-                  label: 'API tokens',
+                  label: 'MCP connector',
                   onClick: () => setTokensOpen(true),
                 },
                 { type: 'divider' as const },

@@ -368,9 +368,9 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
   }, []);
 
   const title = useMemo(() => {
-    if (view === 'create') return 'New API token';
+    if (view === 'create') return 'New MCP token';
     if (view === 'reveal') return 'Token created';
-    return 'API tokens';
+    return 'MCP connector';
   }, [view]);
 
   return (
@@ -395,12 +395,25 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
             <IntroNote>
               <MdKey size={16} style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                A token is like a password that lets an <b>external</b> AI app (Claude Code, Cursor
-                or any other MCP client on your computer) use your Skills. Generate one, paste it
-                into that app, and revoke it here anytime to cut its access. The Use a Skill chat
-                on this site doesn&apos;t need one.
+                Connect an <b>external</b> AI app (Claude Code, Cursor or any other MCP client on
+                your computer) to your memories. Two things are needed: the <b>MCP server URL</b>{' '}
+                below and a <b>token</b> (like a password) you generate here. Revoke the token
+                anytime to cut that app&apos;s access. The Talk to Memory chat on this site
+                doesn&apos;t need any of this.
               </div>
             </IntroNote>
+
+            <Field>
+              <Label>MCP server URL</Label>
+              <RevealValue>
+                <span style={{ flex: 1 }}>{MCP_URL}</span>
+                <Tooltip title="Copy to clipboard">
+                  <IconBtn onClick={() => handleCopy(MCP_URL)}>
+                    <MdContentCopy size={16} />
+                  </IconBtn>
+                </Tooltip>
+              </RevealValue>
+            </Field>
 
             {loading ? (
               <ListEmpty>
@@ -550,7 +563,7 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
                 </div>
                 <div>
                   <SnippetHead>
-                    <span>2. Claude Desktop / Cursor / other clients (JSON)</span>
+                    <span>2. Cursor / VS Code / other JSON-config clients</span>
                     <CopyBtn type="button" onClick={() => handleCopy(jsonSnippet(created.token))}>
                       <MdContentCopy size={12} /> Copy
                     </CopyBtn>
@@ -558,8 +571,14 @@ const TokensManagerDialog = ({ open, onClose }: Props) => {
                   <Snippet>{jsonSnippet(created.token)}</Snippet>
                 </div>
                 <div>
-                  Once connected, your Skills show up as tools, and the <code>use_skill</code> prompt
-                  (<code>/mcp__plurality__use_skill</code> in Claude Code) loads one by name.
+                  Once connected, your memories show up as tools, and the <code>use_skill</code>{' '}
+                  prompt (<code>/mcp__plurality__use_skill</code> in Claude Code) loads a
+                  bucket&apos;s Skill by name.
+                </div>
+                <div>
+                  Heads up: the claude.ai website&apos;s &quot;Connectors&quot; screen only accepts
+                  OAuth servers and has no field for this token, so it cannot connect to this
+                  server yet. Use Claude Code or a JSON-config client instead.
                 </div>
               </ConnectBlock>
             </Field>

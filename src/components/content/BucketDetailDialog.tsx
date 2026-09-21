@@ -685,8 +685,8 @@ const BucketDetailDialog = ({
         {readOnly && (
           <Banner>
             <MdLockOutline size={16} />
-            This Skill is minted, so its contexts and skill are frozen on chain. You can view them but not
-            change them. To chat with it, use the Use a Skill tab.
+            This memory is minted, so its contexts and skill are frozen on chain. You can view them but not
+            change them. To chat with it, use the Talk to Memory tab.
           </Banner>
         )}
 
