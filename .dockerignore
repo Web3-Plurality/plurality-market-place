@@ -9,3 +9,8 @@ dist-ssr
 !.env.example
 !.env.dev.example
 !.env.production.example
+# KEEP THIS: CI stages the build-time env as .env.production before docker
+# build. Removing this negation strips it from the build context, Vite bakes
+# empty VITE_ vars, and the deployed UI can't reach the API ("Failed to get
+# authentication nonce"). Already broke prod once.
+!.env.production
