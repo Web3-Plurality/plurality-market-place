@@ -4,7 +4,7 @@ import { message, Input } from 'antd';
 import { MdStar, MdStarBorder, MdRateReview, MdSync } from 'react-icons/md';
 import { useAccount, useWriteContract, useSwitchChain, usePublicClient } from 'wagmi';
 import { zeroHash } from 'viem';
-import { oasisSapphireTestnet } from '../../services/wagmi';
+import { marketplaceChain } from '../../services/wagmi';
 import ReputationRegistryABI from '../../abis/ReputationRegistry.json';
 import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
 import { apiGet } from '../../utils/api';
@@ -185,7 +185,7 @@ const NftReviews = ({ tokenId }: Props) => {
   const { writeContractAsync } = useWriteContract();
   const { switchChain } = useSwitchChain();
   // Reputation data lives on Sapphire regardless of the wallet's current chain.
-  const publicClient = usePublicClient({ chainId: oasisSapphireTestnet.id });
+  const publicClient = usePublicClient({ chainId: marketplaceChain.id });
 
   const [reputationAddr, setReputationAddr] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -272,9 +272,9 @@ const NftReviews = ({ tokenId }: Props) => {
       message.error('Write a short comment first');
       return;
     }
-    if (chainId !== oasisSapphireTestnet.id) {
+    if (chainId !== marketplaceChain.id) {
       try {
-        switchChain({ chainId: oasisSapphireTestnet.id });
+        switchChain({ chainId: marketplaceChain.id });
         message.info('Please switch to Oasis Sapphire Testnet');
       } catch {
         message.error('Failed to switch network');
@@ -286,6 +286,7 @@ const NftReviews = ({ tokenId }: Props) => {
     try {
       // giveFeedback(agentId, value, valueDecimals, tag1, tag2, endpoint, feedbackURI, feedbackHash)
       const txHash = await writeContractAsync({
+        chainId: marketplaceChain.id,
         address: reputationAddr as `0x${string}`,
         abi: ReputationRegistryABI,
         functionName: 'giveFeedback',

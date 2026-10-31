@@ -4,7 +4,7 @@ import { message, Input, Modal } from 'antd';
 import { MdRefresh, MdSell, MdRemoveShoppingCart } from 'react-icons/md';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
-import { oasisSapphireTestnet } from '../../services/wagmi';
+import { marketplaceChain } from '../../services/wagmi';
 import { describeTxError } from '../../utils/txErrors';
 import NftPreviewCard from './NftPreviewCard';
 import NftDetailModal from './NftDetailModal';
@@ -111,7 +111,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
   const { writeContractAsync } = useWriteContract();
   const { address } = useAccount();
   // Always talk to Sapphire for reads / receipts, whatever chain the wallet is on.
-  const sapphireClient = usePublicClient({ chainId: oasisSapphireTestnet.id });
+  const sapphireClient = usePublicClient({ chainId: marketplaceChain.id });
   // Upper bound for "copies to list" = what this wallet actually holds.
   const [listingMax, setListingMax] = useState<number>(1);
   const [detailNft, setDetailNft] = useState<NftSnapshot | null>(null);
@@ -171,6 +171,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
       if (!approved) {
         setProcessingLabel('Approving…');
         const approveTx = await writeContractAsync({
+          chainId: marketplaceChain.id,
           address: contract,
           abi: PluralityMemoryNFTABI,
           functionName: 'setApprovalForAll',
@@ -201,6 +202,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
       // Step 3: the real transaction.
       setProcessingLabel('Signing…');
       const listTxHash = await writeContractAsync({
+        chainId: marketplaceChain.id,
         address: contract,
         abi: PluralityMemoryNFTABI,
         functionName: 'listBucket',
@@ -239,6 +241,7 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
 
       setProcessingLabel('Signing…');
       const txHash = await writeContractAsync({
+        chainId: marketplaceChain.id,
         address: addr as `0x${string}`,
         abi: PluralityMemoryNFTABI,
         functionName: 'delistBucket',
@@ -246,13 +249,8 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
       });
 
       setProcessingLabel('Confirming…');
-      const { createPublicClient, http, defineChain } = await import('viem');
-      const chain = defineChain({
-        id: 23295, name: 'Oasis Sapphire Testnet',
-        nativeCurrency: { name: 'TEST', symbol: 'TEST', decimals: 18 },
-        rpcUrls: { default: { http: ['https://testnet.sapphire.oasis.io'] } },
-      });
-      const publicClient = createPublicClient({ chain, transport: http() });
+      const { createPublicClient, http } = await import('viem');
+      const publicClient = createPublicClient({ chain: marketplaceChain, transport: http() });
       await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       await apiPost(`/blockchain/delist/${tokenId}`, { txHash });
