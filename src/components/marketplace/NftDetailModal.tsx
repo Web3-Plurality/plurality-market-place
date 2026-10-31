@@ -1161,20 +1161,20 @@ const NftDetailModal = ({
       <Section>
         <SectionLabel>
           Contexts {previewOnly ? (
-            <>({previewCount}/{previewCount} verified on-chain)</>
+            <>({previewCount}/{previewCount} registered on-chain)</>
           ) : checkingContexts ? (
             <SpinLabel>
               <MdSync size={12} /> verifying...
             </SpinLabel>
           ) : (
-            <>({verifiedCount}/{totalContexts} verified on-chain)</>
+            <>({verifiedCount}/{totalContexts} registered on-chain)</>
           )}
         </SectionLabel>
         {previewOnly ? (
           <InfoRow>
             <InfoValue>
               {previewCount > 0
-                ? `${previewCount} context${previewCount === 1 ? '' : 's'}, all verified on-chain. Contents are revealed to the NFT holder after purchase.`
+                ? `${previewCount} context${previewCount === 1 ? '' : 's'}, all registered on-chain. Contents are revealed to the NFT holder after purchase.`
                 : 'No contexts in this bucket.'}
             </InfoValue>
           </InfoRow>
@@ -1189,11 +1189,11 @@ const NftDetailModal = ({
                   <StatusBadge $verified={verified} $clickable={false}>
                     {verified ? (
                       <span className="status-default">
-                        <MdVerified size={12} /> Verified
+                        <MdVerified size={12} /> Registered
                       </span>
                     ) : (
                       <span className="status-default">
-                        <MdShield size={12} /> Unverified
+                        <MdShield size={12} /> Unregistered
                       </span>
                     )}
                   </StatusBadge>
