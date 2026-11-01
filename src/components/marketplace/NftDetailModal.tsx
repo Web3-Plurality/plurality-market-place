@@ -15,7 +15,7 @@ import ContextContentModal from '../content/ContextContentModal';
 import SkillViewModal from './SkillViewModal';
 import { apiGet, apiPost } from '../../utils/api';
 import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
-import { oasisSapphireTestnet } from '../../services/wagmi';
+import { marketplaceChain } from '../../services/wagmi';
 import type { NftSnapshot, SellerListing } from './types';
 
 interface Props {
@@ -635,7 +635,7 @@ const NftDetailModal = ({
   const { address, isConnected, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
-  const publicClient = usePublicClient({ chainId: oasisSapphireTestnet.id });
+  const publicClient = usePublicClient({ chainId: marketplaceChain.id });
 
   const [sellers, setSellers] = useState<SellerListing[]>([]);
   const [loadingSellers, setLoadingSellers] = useState(false);
@@ -819,9 +819,9 @@ const NftDetailModal = ({
       return;
     }
 
-    if (chainId !== oasisSapphireTestnet.id) {
+    if (chainId !== marketplaceChain.id) {
       try {
-        switchChain({ chainId: oasisSapphireTestnet.id });
+        switchChain({ chainId: marketplaceChain.id });
         message.info('Please switch to Oasis Sapphire Testnet');
         return;
       } catch {
@@ -843,6 +843,7 @@ const NftDetailModal = ({
       setBuyLabel('Confirm in MetaMask…');
       const totalValue = BigInt(sellerListing.price) * BigInt(quantity);
       const txHash = await writeContractAsync({
+        chainId: marketplaceChain.id,
         address: contractAddr as `0x${string}`,
         abi: PluralityMemoryNFTABI,
         functionName: 'buyBucket',
@@ -1161,20 +1162,20 @@ const NftDetailModal = ({
       <Section>
         <SectionLabel>
           Contexts {previewOnly ? (
-            <>({previewCount}/{previewCount} verified on-chain)</>
+            <>({previewCount}/{previewCount} registered on-chain)</>
           ) : checkingContexts ? (
             <SpinLabel>
               <MdSync size={12} /> verifying...
             </SpinLabel>
           ) : (
-            <>({verifiedCount}/{totalContexts} verified on-chain)</>
+            <>({verifiedCount}/{totalContexts} registered on-chain)</>
           )}
         </SectionLabel>
         {previewOnly ? (
           <InfoRow>
             <InfoValue>
               {previewCount > 0
-                ? `${previewCount} context${previewCount === 1 ? '' : 's'}, all verified on-chain. Contents are revealed to the NFT holder after purchase.`
+                ? `${previewCount} context${previewCount === 1 ? '' : 's'}, all registered on-chain. Contents are revealed to the NFT holder after purchase.`
                 : 'No contexts in this bucket.'}
             </InfoValue>
           </InfoRow>
@@ -1189,11 +1190,11 @@ const NftDetailModal = ({
                   <StatusBadge $verified={verified} $clickable={false}>
                     {verified ? (
                       <span className="status-default">
-                        <MdVerified size={12} /> Verified
+                        <MdVerified size={12} /> Registered
                       </span>
                     ) : (
                       <span className="status-default">
-                        <MdShield size={12} /> Unverified
+                        <MdShield size={12} /> Unregistered
                       </span>
                     )}
                   </StatusBadge>

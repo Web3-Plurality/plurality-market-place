@@ -3,10 +3,11 @@ import { metaMask } from 'wagmi/connectors';
 import { http, createConfig } from '@wagmi/core';
 import { QueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
-import { defineChain } from 'viem';
+import { defineChain, type Chain } from 'viem';
+import { MARKETPLACE_CHAIN } from '../utils/env';
 
 // Oasis Sapphire Testnet chain definition
-export const oasisSapphireTestnet = defineChain({
+const oasisSapphireTestnet = defineChain({
   id: 23295,
   name: 'Oasis Sapphire Testnet',
   nativeCurrency: { name: 'TEST', symbol: 'TEST', decimals: 18 },
@@ -19,8 +20,25 @@ export const oasisSapphireTestnet = defineChain({
   testnet: true,
 });
 
+// Oasis Sapphire Mainnet chain definition
+const oasisSapphireMainnet = defineChain({
+  id: 23294,
+  name: 'Oasis Sapphire',
+  nativeCurrency: { name: 'ROSE', symbol: 'ROSE', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['https://sapphire.oasis.io'] },
+  },
+  blockExplorers: {
+    default: { name: 'Oasis Explorer', url: 'https://explorer.oasis.io/mainnet/sapphire' },
+  },
+});
+
+// The one chain every wallet write and the SIWE login are bound to, picked by
+// VITE_APP_CHAIN: testnet in dev/pre-release builds, mainnet in production.
+export const marketplaceChain: Chain = MARKETPLACE_CHAIN === 'mainnet' ? oasisSapphireMainnet : oasisSapphireTestnet;
+
 export const wagmiConfig = createConfig({
-  chains: [mainnet, sepolia, optimism, oasisSapphireTestnet],
+  chains: [mainnet, sepolia, optimism, marketplaceChain],
   connectors: [
     metaMask({
       preferDesktop: true,

@@ -4,7 +4,7 @@ import { useAccount, useSendTransaction, usePublicClient, useSwitchChain } from 
 import { message, Tooltip } from 'antd';
 import { MdToken } from 'react-icons/md';
 import { useMemoryNFT, type NftMintMetadata } from '../../hooks/useMemoryNFT';
-import { oasisSapphireTestnet } from '../../services/wagmi';
+import { marketplaceChain } from '../../services/wagmi';
 import MintNftDialog from './MintNftDialog';
 
 interface MintBucketButtonProps {
@@ -145,9 +145,9 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
       message.error('Please connect your wallet first');
       return;
     }
-    if (chainId !== oasisSapphireTestnet.id) {
+    if (chainId !== marketplaceChain.id) {
       try {
-        switchChain({ chainId: oasisSapphireTestnet.id });
+        switchChain({ chainId: marketplaceChain.id });
         message.info('Please switch to Oasis Sapphire Testnet');
         return;
       } catch {
@@ -196,6 +196,7 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
       let tx1Hash: `0x${string}`;
       try {
         tx1Hash = await sendTransactionAsync({
+          chainId: marketplaceChain.id,
           to: prep.contractAddress,
           data: prep.callData,
         });
@@ -249,6 +250,7 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
       let tx2Hash: `0x${string}`;
       try {
         tx2Hash = await sendTransactionAsync({
+          chainId: marketplaceChain.id,
           to: mintPrep.contractAddress,
           data: mintPrep.callData,
           value: BigInt(mintPrep.mintFee),

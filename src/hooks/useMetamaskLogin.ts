@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { SiweMessage } from 'siwe';
 import { message } from 'antd';
 import { getSiweNonce, authenticateSiwe } from '../services/authApi';
+import { marketplaceChain } from '../services/wagmi';
 
 // Extend window type for Ethereum
 declare global {
@@ -33,7 +34,9 @@ export const useMetamaskLogin = (): UseMetamaskLoginReturn => {
       statement,
       uri: origin,
       version: '1',
-      chainId: 1,
+      // The backend verifies domain AND chainId: a signature collected by
+      // another site or for another network must not log in here.
+      chainId: marketplaceChain.id,
       nonce,
     });
     return siweMessage.prepareMessage();
