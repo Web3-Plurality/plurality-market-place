@@ -6,6 +6,7 @@ import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
 import { marketplaceChain } from '../../services/wagmi';
 import { describeTxError } from '../../utils/txErrors';
+import { waitForTxSuccess } from '../../utils/txReceipt';
 import NftPreviewCard from './NftPreviewCard';
 import NftDetailModal from './NftDetailModal';
 import { apiPost, apiGet } from '../../utils/api';
@@ -249,21 +250,28 @@ const AcquiredNftList = ({ nfts, loading, onRefresh }: Props) => {
       });
 
       setProcessingLabel('Confirming…');
-      const { createPublicClient, http } = await import('viem');
-      const publicClient = createPublicClient({ chain: marketplaceChain, transport: http() });
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      // Throws if the tx reverted — a failed delist must never reach the
+      // success message or the backend record call.
+      await waitForTxSuccess(sapphireClient, txHash, 'delist');
 
-      await apiPost(`/blockchain/delist/${tokenId}`, { txHash });
+      const res = await apiPost(`/blockchain/delist/${tokenId}`, { txHash });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body.message ||
+            body.error ||
+            `The delist is on-chain but could not be recorded (${res.status}). Refresh in a moment.`,
+        );
+      }
       message.success('NFT delisted');
       onRefresh();
-    } catch (error: any) {
-      const msg = error.message?.includes('User rejected') ? 'Transaction rejected' : 'Failed to delist';
-      message.error(msg);
+    } catch (error: unknown) {
+      message.error(describeTxError(error, 'Failed to delist'));
     } finally {
       setProcessing(null);
       setProcessingLabel('');
     }
-  }, [writeContractAsync, onRefresh, getContractAddress]);
+  }, [sapphireClient, writeContractAsync, onRefresh, getContractAddress]);
 
   if (loading) return <Loading>Loading acquired NFTs…</Loading>;
 

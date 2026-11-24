@@ -1,13 +1,15 @@
 import { useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { message, Input, Modal } from 'antd';
-import { MdRefresh, MdSell, MdRemoveShoppingCart, MdPlayArrow } from 'react-icons/md';
+import { MdRefresh, MdSell, MdRemoveShoppingCart, MdPlayArrow, MdVerified } from 'react-icons/md';
 import { useAccount, useWriteContract, useSendTransaction, usePublicClient } from 'wagmi';
 import { parseEther } from 'viem';
 import { marketplaceChain } from '../../services/wagmi';
 import { describeTxError } from '../../utils/txErrors';
+import { waitForTxSuccess } from '../../utils/txReceipt';
 import NftPreviewCard from './NftPreviewCard';
 import NftDetailModal from './NftDetailModal';
+import BadgeManageDialog from './BadgeManageDialog';
 import { apiPost, apiGet } from '../../utils/api';
 import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
 import { useMemoryNFT } from '../../hooks/useMemoryNFT';
@@ -106,7 +108,7 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
   const sapphireClient = usePublicClient({ chainId: marketplaceChain.id });
   // Upper bound for "copies to list" = what this wallet actually holds.
   const [listingMax, setListingMax] = useState<number>(1);
-  const { prepareMint, confirmMint } = useMemoryNFT();
+  const { prepareMint, confirmMint, reconcileMint } = useMemoryNFT();
   const [listingTokenId, setListingTokenId] = useState<number | null>(null);
   const [cancellingProfileId, setCancellingProfileId] = useState<string | null>(null);
   const [resumingProfileId, setResumingProfileId] = useState<string | null>(null);
@@ -145,7 +147,26 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
     async (profileId: string) => {
       setResumingProfileId(profileId);
       try {
-        const mintPrep = await prepareMint(profileId);
+        // No `copies` here on purpose: the backend re-uses the edition size
+        // persisted at the first attempt (passing nothing used to mint 1 copy
+        // no matter what the creator picked).
+        let mintPrep;
+        try {
+          mintPrep = await prepareMint(profileId);
+        } catch (err) {
+          const code = (err as { code?: string })?.code;
+          if (code === 'already_minted_on_chain' || code === 'already_minted') {
+            // A previous mint tx DID land — only the backend confirmation was
+            // interrupted. Signing again would be rejected by the contract;
+            // adopt the existing on-chain mint instead.
+            const adopted = await reconcileMint(profileId);
+            message.success(`Minted as NFT #${adopted.tokenId}! (recovered a previous mint)`);
+            await onRefresh();
+            return;
+          }
+          throw err;
+        }
+
         const txHash = await sendTransactionAsync({
           chainId: marketplaceChain.id,
           to: mintPrep.contractAddress,
@@ -153,9 +174,7 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
           value: BigInt(mintPrep.mintFee),
         });
         message.info('Minting… waiting for on-chain confirmation');
-        if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash: txHash });
-        }
+        await waitForTxSuccess(publicClient, txHash, 'mint');
         const minted = await confirmMint(profileId, txHash);
         if (minted?.tokenId) {
           message.success(`Minted as NFT #${minted.tokenId}!`);
@@ -172,13 +191,14 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
         setResumingProfileId(null);
       }
     },
-    [prepareMint, sendTransactionAsync, publicClient, confirmMint, onRefresh],
+    [prepareMint, reconcileMint, sendTransactionAsync, publicClient, confirmMint, onRefresh],
   );
   const [listingPrice, setListingPrice] = useState('');
   const [listingAmount, setListingAmount] = useState('1');
   const [processing, setProcessing] = useState<number | null>(null);
   const [processingLabel, setProcessingLabel] = useState('');
   const [detailNft, setDetailNft] = useState<NftSnapshot | null>(null);
+  const [badgeProfileId, setBadgeProfileId] = useState<string | null>(null);
 
   const getContractAddress = useCallback(async (): Promise<string | null> => {
     const infoRes = await apiGet('/blockchain/contract-info');
@@ -313,22 +333,28 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
       });
 
       setProcessingLabel('Confirming…');
+      // Throws if the tx reverted — a failed delist must never reach the
+      // success message or the backend record call.
+      await waitForTxSuccess(sapphireClient, txHash, 'delist');
 
-      const { createPublicClient, http } = await import('viem');
-      const publicClient = createPublicClient({ chain: marketplaceChain, transport: http() });
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
-
-      await apiPost(`/blockchain/delist/${tokenId}`, { txHash });
+      const res = await apiPost(`/blockchain/delist/${tokenId}`, { txHash });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body.message ||
+            body.error ||
+            `The delist is on-chain but could not be recorded (${res.status}). Refresh in a moment.`,
+        );
+      }
       message.success('NFT delisted');
       onRefresh();
-    } catch (error: any) {
-      const msg = error.message?.includes('User rejected') ? 'Transaction rejected' : 'Failed to delist';
-      message.error(msg);
+    } catch (error: unknown) {
+      message.error(describeTxError(error, 'Failed to delist'));
     } finally {
       setProcessing(null);
       setProcessingLabel('');
     }
-  }, [writeContractAsync, onRefresh, getContractAddress]);
+  }, [sapphireClient, writeContractAsync, onRefresh, getContractAddress]);
 
   if (loading) return <Loading>Loading minted NFTs…</Loading>;
 
@@ -382,27 +408,33 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
                 onClick={() => setDetailNft(nft)}
                 actions={
                   status === 'minted' && nft.tokenId ? (
-                    nft.myListingActive ? (
-                      <ActionButton
-                        $variant="danger"
-                        onClick={() => handleDelist(nft.tokenId!)}
-                        disabled={processing === nft.tokenId}
-                      >
-                        <MdRemoveShoppingCart size={14} />
-                        {processing === nft.tokenId ? processingLabel || '…' : 'Delist'}
+                    <>
+                      {nft.myListingActive ? (
+                        <ActionButton
+                          $variant="danger"
+                          onClick={() => handleDelist(nft.tokenId!)}
+                          disabled={processing === nft.tokenId}
+                        >
+                          <MdRemoveShoppingCart size={14} />
+                          {processing === nft.tokenId ? processingLabel || '…' : 'Delist'}
+                        </ActionButton>
+                      ) : (
+                        <ActionButton
+                          onClick={() => {
+                            setListingMax(Math.max(1, nft.copiesOwned ?? nft.editionSize ?? 1));
+                            setListingTokenId(nft.tokenId);
+                          }}
+                          disabled={processing === nft.tokenId}
+                        >
+                          <MdSell size={14} />
+                          {processing === nft.tokenId ? processingLabel || '…' : 'List for Sale'}
+                        </ActionButton>
+                      )}
+                      <ActionButton onClick={() => setBadgeProfileId(nft.profileId)}>
+                        <MdVerified size={14} />
+                        Badges
                       </ActionButton>
-                    ) : (
-                      <ActionButton
-                        onClick={() => {
-                          setListingMax(Math.max(1, nft.copiesOwned ?? nft.editionSize ?? 1));
-                          setListingTokenId(nft.tokenId);
-                        }}
-                        disabled={processing === nft.tokenId}
-                      >
-                        <MdSell size={14} />
-                        {processing === nft.tokenId ? processingLabel || '…' : 'List for Sale'}
-                      </ActionButton>
-                    )
+                    </>
                   ) : (
                     statusBadge
                   )
@@ -441,6 +473,12 @@ const MintedNftList = ({ nfts, loading, onRefresh }: Props) => {
           You hold {listingMax} cop{listingMax === 1 ? 'y' : 'ies'} of this NFT, so that is the maximum.
         </p>
       </Modal>
+
+      <BadgeManageDialog
+        open={badgeProfileId !== null}
+        onClose={() => setBadgeProfileId(null)}
+        profileId={badgeProfileId}
+      />
 
       <NftDetailModal
         nft={detailNft}

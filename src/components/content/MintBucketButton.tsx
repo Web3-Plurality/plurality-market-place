@@ -5,6 +5,7 @@ import { message, Tooltip } from 'antd';
 import { MdToken } from 'react-icons/md';
 import { useMemoryNFT, type NftMintMetadata } from '../../hooks/useMemoryNFT';
 import { marketplaceChain } from '../../services/wagmi';
+import { waitForTxSuccess } from '../../utils/txReceipt';
 import MintNftDialog from './MintNftDialog';
 
 interface MintBucketButtonProps {
@@ -211,8 +212,32 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
       }
 
       setStep('mining-tx1');
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash: tx1Hash });
+      try {
+        await waitForTxSuccess(publicClient, tx1Hash, 'registration');
+      } catch (err) {
+        const failMsg = (err as Error)?.message || '';
+        if (failMsg.includes('reverted on-chain')) {
+          // CONFIRMED revert: nothing landed, cancel back to draft exactly
+          // like a wallet rejection.
+          message.error(failMsg);
+          await cancelMint(profileId);
+          setStep('idle');
+          onCancelledRef.current?.();
+          return;
+        }
+        // Receipt timeout / no RPC client / transient error: the tx may
+        // still be in the mempool and can land AFTER a cancel — which would
+        // flip the bucket to draft moments before its contexts register
+        // on-chain, permanently splitting DB from chain (a re-mint would
+        // then revert on "Context already registered"). Leave the bucket
+        // frozen; the Pending entry in My Minted NFTs resumes or cancels
+        // later, when the backend can see the tx's real fate.
+        message.warning(
+          'Could not confirm the registration transaction yet. Once the network settles, resume or cancel from My Minted NFTs.',
+        );
+        setStep('idle');
+        onCancelledRef.current?.();
+        return;
       }
 
       setStep('confirming-tx1');
@@ -270,8 +295,17 @@ export const MintBucketButton: React.FC<MintBucketButtonProps> = ({
       }
 
       setStep('mining-tx2');
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash: tx2Hash });
+      try {
+        // Throws if tx2 reverted. Contexts are already on-chain (tx1), so the
+        // bucket stays "registered" and the user resumes from My Minted NFTs.
+        await waitForTxSuccess(publicClient, tx2Hash, 'mint');
+      } catch (err) {
+        message.error(
+          `${(err as Error).message || 'Mint transaction failed.'} Contexts are already on-chain — resume from My Minted NFTs.`,
+        );
+        setStep('idle');
+        onCancelledRef.current?.();
+        return;
       }
 
       setStep('confirming-tx2');

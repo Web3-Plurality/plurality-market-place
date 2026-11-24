@@ -229,6 +229,46 @@ export async function uploadFile(profileId: string, file: File): Promise<BucketC
   return response.json();
 }
 
+export interface ImportBundleItemResult {
+  index: number;
+  contextId?: string;
+  title?: string;
+  status: string;
+  error?: string;
+}
+
+export interface ImportBundleResult {
+  profileId: string;
+  total: number;
+  accepted: number;
+  items: ImportBundleItemResult[];
+}
+
+/** True when parsed JSON looks like an AICF "Export for Marketplace" bundle. */
+export function isAicfBundle(data: unknown): boolean {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    (data as { format?: unknown }).format === 'aicf-bucket-export' &&
+    (data as { version?: unknown }).version === 1
+  );
+}
+
+/**
+ * POST /ai/context/import-bundle — splits an AICF export bundle into
+ * individual contexts in this bucket. Each item embeds through the normal
+ * async pipeline, so they appear as IN_PROGRESS contexts and resolve on
+ * their own; no new progress machinery needed.
+ */
+export async function importBundle(profileId: string, bundle: unknown): Promise<ImportBundleResult> {
+  const response = await apiPost('/ai/context/import-bundle', { profileId, bundle });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to import bundle (${response.status})`);
+  }
+  return response.json();
+}
+
 export interface ContextContentPage {
   contextId: string;
   title: string;

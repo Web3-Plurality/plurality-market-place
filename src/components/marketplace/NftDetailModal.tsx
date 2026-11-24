@@ -10,10 +10,14 @@ import { MdOpenInNew, MdVerified, MdShield, MdShoppingCart, MdHistory, MdToken, 
 import { useAccount, useWriteContract, useSwitchChain, usePublicClient } from 'wagmi';
 import { formatEther } from 'viem';
 import OwnerIdenticon from './OwnerIdenticon';
+import BadgeChips from './BadgeChips';
+import { getBadges, type BucketBadgeInfo } from '../../services/badgeApi';
 import NftReviews from './NftReviews';
 import ContextContentModal from '../content/ContextContentModal';
 import SkillViewModal from './SkillViewModal';
 import { apiGet, apiPost } from '../../utils/api';
+import { waitForTxSuccess } from '../../utils/txReceipt';
+import { describeTxError } from '../../utils/txErrors';
 import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
 import { marketplaceChain } from '../../services/wagmi';
 import type { NftSnapshot, SellerListing } from './types';
@@ -621,6 +625,7 @@ const NftDetailModal = ({
   // is on-chain by definition. The modal only shows ✓ verification state;
   // there are no register buttons or per-context tx wiring.
   const [history, setHistory] = useState<HistoryEvent[]>([]);
+  const [creatorBadges, setCreatorBadges] = useState<BucketBadgeInfo[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [myCopies, setMyCopies] = useState<number | null>(null);
   const [verifiedContextIds, setVerifiedContextIds] = useState<Set<string>>(new Set());
@@ -661,11 +666,18 @@ const NftDetailModal = ({
   useEffect(() => {
     if (!open || !nft) {
       setHistory([]);
+      setCreatorBadges([]);
       setVerifiedContextIds(new Set());
       setLiveContexts([]);
       setContextsError(null);
       return;
     }
+
+    // Creator's verified-platform badges — public endpoint, works on both
+    // the browse path and the owner path.
+    getBadges(nft.profileId)
+      .then(setCreatorBadges)
+      .catch(() => setCreatorBadges([]));
 
     // Fetch history (needs a tokenId — pending mints have none yet)
     if (nft.tokenId) {
@@ -852,21 +864,26 @@ const NftDetailModal = ({
       });
 
       setBuyLabel('Confirming on-chain…');
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash: txHash });
-      }
+      // Throws if the tx reverted — a failed purchase must never reach the
+      // success message or the backend record call.
+      await waitForTxSuccess(publicClient, txHash, 'purchase');
 
       setBuyLabel('Updating records…');
-      await apiPost(`/blockchain/buy/${nft.tokenId}`, { txHash });
+      const res = await apiPost(`/blockchain/buy/${nft.tokenId}`, { txHash });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body.message ||
+            body.error ||
+            `The purchase is on-chain but could not be recorded (${res.status}). Refresh in a moment.`,
+        );
+      }
 
       message.success('NFT purchased successfully!');
       onPurchased?.();
       onClose();
-    } catch (error: any) {
-      const msg = error?.message?.includes('User rejected')
-        ? 'Transaction rejected'
-        : 'Failed to buy';
-      message.error(msg);
+    } catch (error: unknown) {
+      message.error(describeTxError(error, 'Failed to buy'));
     } finally {
       setBuying(false);
       setBuyLabel('');
@@ -1156,6 +1173,13 @@ const NftDetailModal = ({
             <OwnerIdenticon address={nft.ownerWallet} size={28} />
             <span>{truncateAddress(nft.ownerWallet)}</span>
           </OwnerRow>
+        </Section>
+      )}
+
+      {creatorBadges.length > 0 && (
+        <Section>
+          <SectionLabel>Creator verification</SectionLabel>
+          <BadgeChips badges={creatorBadges} />
         </Section>
       )}
 
