@@ -8,6 +8,7 @@ import { marketplaceChain } from '../../services/wagmi';
 import ReputationRegistryABI from '../../abis/ReputationRegistry.json';
 import PluralityMemoryNFTABI from '../../abis/PluralityMemoryNFT.json';
 import { apiGet } from '../../utils/api';
+import { waitForTxSuccess } from '../../utils/txReceipt';
 import OwnerIdenticon from './OwnerIdenticon';
 
 /*
@@ -293,7 +294,8 @@ const NftReviews = ({ tokenId }: Props) => {
         args: [BigInt(tokenId), BigInt(rating), 0, comment.trim(), '', '', '', zeroHash],
       });
       message.info('Submitting review on-chain…');
-      if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash });
+      // Throws if the tx reverted — never show "submitted" for a failed review.
+      await waitForTxSuccess(publicClient, txHash, 'review');
       message.success('Review submitted!');
       setComment('');
       setRating(5);
@@ -306,6 +308,8 @@ const NftReviews = ({ tokenId }: Props) => {
         message.error('Transaction rejected');
       } else if (m.includes('cap reached')) {
         message.error('Review limit reached for this NFT');
+      } else if (m.includes('reverted on-chain') || m.includes('Cannot verify')) {
+        message.error(m);
       } else {
         message.error('Failed to submit review');
       }

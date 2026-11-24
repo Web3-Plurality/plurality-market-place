@@ -165,6 +165,11 @@ const Footer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Two-plus action buttons don't fit beside the stats on a narrow card:
+     let the actions drop to their own right-aligned row instead of
+     crushing the stat text and stacking mid-card. */
+  flex-wrap: wrap;
+  row-gap: 8px;
   margin-top: 12px;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.55);
@@ -174,12 +179,26 @@ const FooterLeft = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
 `;
 
 const Actions = styled.div`
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  margin-left: auto;
+
+  /* A single action keeps the original inline placement beside the stats;
+     two or more get their own full-width row of equal buttons (they don't
+     fit beside the stats on a narrow card). */
+  &:has(> :nth-child(2)) {
+    flex: 1 0 100%;
+    margin-left: 0;
+
+    & > * {
+      flex: 1;
+      justify-content: center;
+    }
+  }
 `;
 
 const NftPreviewCard = ({ nft, actions, meta, onClick }: Props) => {

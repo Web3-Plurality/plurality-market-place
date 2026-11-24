@@ -3,13 +3,14 @@ import { Navigate, NavLink, Routes, Route } from 'react-router-dom';
 import styled, { keyframes, css } from 'styled-components';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Dropdown, message } from 'antd';
-import { MdAccountBalanceWallet, MdLogout, MdStorefront, MdSmartToy, MdKey, MdExpandMore, MdDashboard } from 'react-icons/md';
+import { MdAccountBalanceWallet, MdLogout, MdStorefront, MdSmartToy, MdKey, MdExpandMore, MdDashboard, MdVerifiedUser } from 'react-icons/md';
 import { useAppSelector } from '../hooks/useAppStore';
 import { useLogout } from '../hooks/useLogout';
 import MarketplaceDashboard from '../components/marketplace/MarketplaceDashboard';
 import MyPlayground from '../components/marketplace/MyPlayground';
 import AgentPage from '../pages/AgentPage';
 import TokensManagerDialog from '../components/settings/TokensManagerDialog';
+import VerifyProfileDialog from '../components/marketplace/VerifyProfileDialog';
 
 // ─── Shared dark/glass aesthetic (mirrors Login.tsx) ─────────────────────────
 
@@ -293,6 +294,7 @@ const MarketplaceLayoutInner = () => {
   const { disconnectAsync } = useDisconnect();
   const { logout: handleLogout } = useLogout();
   const [tokensOpen, setTokensOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
 
   const handleConnect = useCallback(async () => {
     if (typeof window === 'undefined' || !window.ethereum) {
@@ -385,6 +387,12 @@ const MarketplaceLayoutInner = () => {
                   label: 'MCP connector',
                   onClick: () => setTokensOpen(true),
                 },
+                {
+                  key: 'verify-profile',
+                  icon: <MdVerifiedUser size={14} />,
+                  label: 'Smart Profile (connect socials)',
+                  onClick: () => setVerifyOpen(true),
+                },
                 { type: 'divider' as const },
                 {
                   key: 'logout',
@@ -406,6 +414,7 @@ const MarketplaceLayoutInner = () => {
       </Header>
 
       <TokensManagerDialog open={tokensOpen} onClose={() => setTokensOpen(false)} />
+      <VerifyProfileDialog open={verifyOpen} onClose={() => setVerifyOpen(false)} />
 
       <ContentArea>
         <Routes>

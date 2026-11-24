@@ -95,13 +95,26 @@ export function useMemoryNFT() {
   );
 
   // ── tx2: mint ──────────────────────────────────────────────────────────
-  // `copies` (1..10, default 1) mints N tradable read-access NFTs. The mint fee
-  // is flat regardless of copies — the backend echoes it back in `mintFee`.
-  const prepareMint = useCallback(async (profileId: string, copies = 1): Promise<MintPrepareResult> => {
-    const response = await apiPost(`/blockchain/mint/${profileId}/prepare-mint`, { copies });
+  // `copies` (1..10) mints N tradable read-access NFTs. The mint fee is flat
+  // regardless of copies — the backend echoes it back in `mintFee`. OMIT
+  // `copies` on resume: the backend then re-uses the edition size persisted
+  // at the first attempt instead of silently minting 1 copy.
+  // Thrown errors carry the backend's machine-readable `code` (e.g.
+  // 'already_minted_on_chain', with `tokenId`) so callers can branch on it.
+  const prepareMint = useCallback(async (profileId: string, copies?: number): Promise<MintPrepareResult> => {
+    const response = await apiPost(
+      `/blockchain/mint/${profileId}/prepare-mint`,
+      copies === undefined ? {} : { copies },
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || err.error || 'Failed to prepare mint');
+      const e = new Error(err.message || err.error || 'Failed to prepare mint') as Error & {
+        code?: string;
+        tokenId?: number;
+      };
+      e.code = err.error;
+      e.tokenId = err.tokenId;
+      throw e;
     }
     return (await response.json()) as MintPrepareResult;
   }, []);
@@ -113,6 +126,18 @@ export function useMemoryNFT() {
       throw new Error(err.message || err.error || 'Failed to confirm mint');
     }
     return (await response.json()) as { status: string; tokenId: number; txHash: string; bucketHash: string };
+  }, []);
+
+  // ── reconcile: adopt a mint that landed on-chain but whose confirm call
+  // was interrupted. The backend verifies the chain state (bucketHash →
+  // tokenId + registrant == caller) and stamps the DB — no new transaction.
+  const reconcileMint = useCallback(async (profileId: string) => {
+    const response = await apiPost(`/blockchain/mint/${profileId}/reconcile`, {});
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || err.error || 'Failed to reconcile mint');
+    }
+    return (await response.json()) as { status: string; tokenId: number };
   }, []);
 
   // ── cancel (only valid in `frozen` state — see backend) ────────────────
@@ -143,6 +168,7 @@ export function useMemoryNFT() {
     confirmRegistration,
     prepareMint,
     confirmMint,
+    reconcileMint,
     cancelMint,
     uploadCover,
   };

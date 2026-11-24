@@ -18,6 +18,8 @@ import {
   listContexts,
   addRawContext,
   uploadFile,
+  importBundle,
+  isAicfBundle,
   deleteContext,
   getSkill,
   deleteSkill,
@@ -607,6 +609,44 @@ const BucketDetailDialog = ({
       }
       setAdding(true);
       try {
+        // An AICF "Export for Marketplace" bundle goes through the dedicated
+        // import path: split into individual contexts with their original
+        // titles instead of being embedded as one big JSON document. Any
+        // other .json file still uploads as a normal knowledge file.
+        if (file.name.toLowerCase().endsWith('.json')) {
+          let parsed: unknown = null;
+          try {
+            parsed = JSON.parse(await file.text());
+          } catch {
+            parsed = null;
+          }
+          if (isAicfBundle(parsed)) {
+            const result = await importBundle(bucketId, parsed);
+            await refreshContexts();
+            // Be honest per status: 'error' items are DEAD rows (the AI
+            // service hand-off failed), not "still indexing", and a run
+            // with zero accepted items is a failure, not a success.
+            const failed = result.items.filter((it) => it.status === 'error').length;
+            const skipped = result.items.filter((it) => it.status === 'skipped').length;
+            const detail = [
+              failed > 0 ? `${failed} failed` : '',
+              skipped > 0 ? `${skipped} skipped` : '',
+            ]
+              .filter(Boolean)
+              .join(', ');
+            if (result.accepted === 0) {
+              message.error(
+                `Import failed — none of the ${result.total} memories in "${file.name}" could be queued${detail ? ` (${detail})` : ''}.`,
+              );
+            } else {
+              message.success(
+                `Importing ${result.accepted} of ${result.total} memories from "${file.name}"${detail ? ` (${detail})` : ''} — accepted items will finish indexing in the background.`,
+              );
+            }
+            return;
+          }
+        }
+
         await uploadFile(bucketId, file);
         await refreshContexts();
         message.success(`Uploaded "${file.name}"`);
